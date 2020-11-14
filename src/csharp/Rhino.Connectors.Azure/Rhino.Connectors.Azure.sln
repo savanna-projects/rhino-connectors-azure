@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30611.23
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rhino.Connectors.Azure", "Rhino.Connectors.Azure\Rhino.Connectors.Azure.csproj", "{9C175E60-2780-4E50-A01B-456B143A84EE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{2DA549C5-ACC6-4FA0-8CCD-F234CB3728B7}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\..\build\azure_rhino_api.yml = ..\..\..\build\azure_rhino_api.yml
+		..\..\..\build\azure_rhino_template.yml = ..\..\..\build\azure_rhino_template.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\..\docs\basics\AzureConfiguration.md = ..\..\..\docs\basics\AzureConfiguration.md
+		..\..\..\docs\basics\ConnectorCapabilities.md = ..\..\..\docs\basics\ConnectorCapabilities.md
+		..\..\..\README.md = ..\..\..\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{6807803A-0674-4358-A836-D2E414A0B55E}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\..\test\azure_settings_mstest.runsettings = ..\..\..\test\azure_settings_mstest.runsettings
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rhino.Connectors.Azure.UnitTests", "Rhino.Connectors.Azure.UnitTests\Rhino.Connectors.Azure.UnitTests.csproj", "{9E89E591-D857-4F4C-AC52-48F2BE820201}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lib", "Lib", "{A1163991-A2BF-4A59-BCE1-44F4192915D5}"
+	ProjectSection(SolutionItems) = preProject
+		..\..\..\lib\Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.dll = ..\..\..\lib\Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.dll
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9C175E60-2780-4E50-A01B-456B143A84EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C175E60-2780-4E50-A01B-456B143A84EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C175E60-2780-4E50-A01B-456B143A84EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C175E60-2780-4E50-A01B-456B143A84EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {208D91AA-7136-4742-B15C-ACD652AD6B33}
+	EndGlobalSection
+EndGlobal
