@@ -155,10 +155,13 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<RhinoTestCase> ByTestCases(IEnumerable<string> ids)
         {
             // setup
-            var itemsToFind = ids.AsNumbers();
+            var itemsToFind = ids.ToNumbers();
+
+            // parse
+            itemsToFind = GetTestCases(ids: itemsToFind).Select(i => i.Id.AsInt());
 
             // get
-            return GetTestCases(ids: itemsToFind).Select(i => i.AsRhinoTestCase());
+            return wiClient.GetRhinoTestCases(ids: itemsToFind);
         }
 
         [Description(GetTestCasesMethod)]
@@ -166,7 +169,7 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<RhinoTestCase> ByTestSuites(IEnumerable<string> ids)
         {
             // setup
-            var itemsToFind = ids.AsNumbers();
+            var itemsToFind = ids.ToNumbers();
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testCases = new ConcurrentBag<int>();
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
@@ -189,7 +192,8 @@ namespace Rhino.Connectors.Azure
             var groups = testCases.Split(100);
             Parallel.ForEach(groups, options, group =>
             {
-                var range = GetTestCases(group).Select(i => i.AsRhinoTestCase());
+                var items = GetTestCases(group).Select(i => i.Id.AsInt());
+                var range = wiClient.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -202,7 +206,7 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<RhinoTestCase> ByTestPlans(IEnumerable<string> ids)
         {
             // setup
-            var itemsToFind = ids.AsNumbers();
+            var itemsToFind = ids.ToNumbers();
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var suitesByPlans = new ConcurrentBag<(int Plan, IEnumerable<int> Suites)>();
             var testCases = new ConcurrentBag<string>();
@@ -238,14 +242,15 @@ namespace Rhino.Connectors.Azure
             });
 
             // setup > log
-            itemsToFind = testCases.AsNumbers();
+            itemsToFind = testCases.ToNumbers();
             logger?.Debug($"Get-ByTestPlans -TestCase = {itemsToFind.Count()}");
 
             // get: rhino test cases
             var groups = itemsToFind.Split(100);
             Parallel.ForEach(groups, options, group =>
             {
-                var range = GetTestCases(group).Select(i => i.AsRhinoTestCase());
+                var items = GetTestCases(group).Select(i => i.Id.AsInt());
+                var range = wiClient.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -283,7 +288,8 @@ namespace Rhino.Connectors.Azure
             logger?.Debug($"Get-ByQueries = {itemsToFind.Count}");
 
             // get
-            return GetTestCases(testCases).Select(i => i.AsRhinoTestCase());
+            var items = GetTestCases(testCases).Select(i => i.Id.AsInt());
+            return wiClient.GetRhinoTestCases(ids: items);
         }
 
         // get test cases by id

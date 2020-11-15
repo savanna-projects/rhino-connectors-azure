@@ -3,14 +3,11 @@
  * 
  * RESOURCES
  */
-using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 
-using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
 using Rhino.Connectors.Azure.Framework;
 
-using System;
 using System.Net;
 
 namespace Rhino.Connectors.Azure.Extensions
@@ -43,17 +40,5 @@ namespace Rhino.Connectors.Azure.Extensions
                 ? CredentialsFactory.GetVssCredentials(new NetworkCredential(userName, password))
                 : CredentialsFactory.GetVssCredentials(userName, password);
         }
-
-        #region *** Test Case ***
-        /// <summary>
-        /// Converts a <see cref="WorkItem"/> into RhinoTestCase.
-        /// </summary>
-        /// <param name="item"><see cref="WorkItem"/> to convert.</param>
-        /// <returns>RhinoTestCase object.</returns>
-        public static RhinoTestCase AsRhinoTestCase(this WorkItem item)
-        {
-            return new RhinoTestCase();
-        }
-        #endregion
     }
 }
