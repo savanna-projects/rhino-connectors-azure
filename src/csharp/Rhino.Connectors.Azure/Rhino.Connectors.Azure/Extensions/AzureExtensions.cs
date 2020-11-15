@@ -53,6 +53,32 @@ namespace Rhino.Connectors.Azure.Extensions
             return DoFindTestSuites(client, id);
         }
 
+        /// <summary>
+        /// Add test cases to suite.
+        /// </summary>
+        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> client by which to find test suites.</param>
+        /// <param name="suiteId">ID of the test suite to find..</param>
+        public static int GetPlanForSuite(
+            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
+            string project,
+            int suiteId)
+        {
+            try
+            {
+                // setup
+                var plans = client.GetTestPlansWithContinuationTokenAsync(project).GetAwaiter().GetResult();
+                var suites = plans.SelectMany(i => client.GetTestSuitesForPlanWithContinuationTokenAsync(project, i.Id).Result);
+
+                // get
+                var plan = suites.FirstOrDefault(i => i.Id == suiteId)?.Plan;
+                return plan == default ? 0 : plan.Id;
+            }
+            catch (Exception e) when (e != null)
+            {
+                return 0;
+            }
+        }
+
         #region *** Get Test Case ***
         /// <summary>
         /// Gets a RhinoTestCase based on <see cref="WorkItem"/> object.

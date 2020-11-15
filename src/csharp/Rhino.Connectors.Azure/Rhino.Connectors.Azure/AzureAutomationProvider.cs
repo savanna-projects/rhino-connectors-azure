@@ -14,6 +14,8 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi;
 
+using Newtonsoft.Json;
+
 using Rhino.Api;
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
@@ -40,6 +42,7 @@ namespace Rhino.Connectors.Azure
         private const string TypeField = "System.WorkItemType";
         private const string TestCase = "Test Case";
         private const string GetTestCasesMethod = "GetTestCases";
+        private const string CapabilitesKey = "capabilites";
         private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
         private const Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes TestEntryType = Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes.TestCase;
 
@@ -51,7 +54,7 @@ namespace Rhino.Connectors.Azure
         // members
         private readonly ILogger logger;
 
-        #region *** Constructors    ***
+        #region *** Constructors      ***
         /// <summary>
         /// Creates a new instance of this Rhino.Api.Simulator.Framework.AutomationProvider.
         /// </summary>
@@ -83,6 +86,7 @@ namespace Rhino.Connectors.Azure
             var credentials = configuration.GetVssCredentials();
             var connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
+            Configuration.Capabilities ??= new Dictionary<string, object>();
 
             // create clients
             wiClient = connection.GetClient<WorkItemTrackingHttpClient>();
@@ -91,7 +95,7 @@ namespace Rhino.Connectors.Azure
         }
         #endregion
 
-        #region *** Get: Test Cases ***
+        #region *** Get: Test Cases   ***
         /// <summary>
         /// Returns a list of test cases for a project.
         /// </summary>
@@ -126,7 +130,7 @@ namespace Rhino.Connectors.Azure
             logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
 
             // get
-            return distinctTestCases;
+            return distinctTestCases.Select(i => i.AddToContext(CapabilitesKey, Configuration.Capabilities));
         }
 
         private IEnumerable<RhinoTestCase> OnGetTestCases(MethodInfo method, IEnumerable<string> ids)
@@ -307,6 +311,71 @@ namespace Rhino.Connectors.Azure
             {
                 logger?.Error(e.Message, e);
                 return Array.Empty<WorkItem>();
+            }
+        }
+        #endregion
+
+        #region *** Create: Test Case ***
+        /// <summary>
+        /// Creates a new test case under the specified automation provider.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to create automation provider test case.</param>
+        /// <returns>The ID of the newly created entity.</returns>
+        public override string CreateTestCase(RhinoTestCase testCase)
+        {
+            // setup
+            var document = testCase.AsTestDocument();
+
+            // post
+            var item = wiClient
+                .CreateWorkItemAsync(document, Configuration.ConnectorConfiguration.Project, TestCase)
+                .GetAwaiter()
+                .GetResult();
+            var itemResult = JsonConvert.SerializeObject(item);
+            var id = $"{item.Id.AsInt()}";
+
+            // exit conditions
+            if (!testCase.TestSuites.Any())
+            {
+                return itemResult;
+            }
+
+            // setup: add to suites
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = testCase.Context.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+            var testPlan = options.GetCastedValueOrDefault("testPlan", 0);
+
+            // add
+            foreach (var testSuite in testCase.TestSuites.AsNumbers())
+            {
+                AddTestToSuite(testPlan, testSuite, testCase: id);
+            }
+
+            // get
+            return id;
+        }
+
+        private void AddTestToSuite(int testPlan, int testSuite, string testCase)
+        {
+            // setup
+            var project = Configuration.ConnectorConfiguration.Project;
+            testPlan = testPlan <= 0 ? tpClient.GetPlanForSuite(project, testSuite) : 0;
+
+            // put
+            try
+            {
+                tmClient
+                    .AddTestCasesToSuiteAsync(project, testPlan, testSuite, testCase)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception e)
+            {
+                var message = "Create-TestCase " +
+                    $"-TestPlan {testPlan} " +
+                    $"-TestSuite {testSuite} " +
+                    $"-TestCase {testCase} = {e.GetBaseException().Message}";
+                logger?.Error(message);
             }
         }
         #endregion

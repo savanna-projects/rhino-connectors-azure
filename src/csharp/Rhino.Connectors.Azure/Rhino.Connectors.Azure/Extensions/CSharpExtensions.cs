@@ -33,6 +33,7 @@ namespace Rhino.Connectors.Azure.Extensions
             .Replace("&lt;", "<")
             .Replace("&gt;", ">")
             .Replace("&amp;", "")
-            .Replace("nbsp;", "");
+            .Replace("nbsp;", "")
+            .Replace("<BR/>", "\n");
     }
 }

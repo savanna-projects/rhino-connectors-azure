@@ -18,12 +18,23 @@ The options must be passed under `<connector_name>:options` key, as follow:
 "capabilities": {
   "connector_azure:options": {
     "testPlan": 1
+    "System.AreaPath": "Rhino Connector",
+    "System.IterationPath": "Rhino Connector/Iteration 1"
+    "customFields": {
+      "System.CustomField": "Foo & Bar"
+      ...
+    }
     ...
   }
 }
 ...
 ```  
 
-|Name          |Type   |Description                                                                    |
-|--------------|-------|-------------------------------------------------------------------------------|
-|testPlan      |number |The test plan ID to use. If set, all tests will be fetched from this plan only.|
+System.IterationPath
+
+|Name                |Type   |Description                                                                                                     |
+|--------------------|-------|----------------------------------------------------------------------------------------------------------------|
+|testPlan            |number |The test plan ID to use. If set, tests will be created under this plan (mandatory from TFS =< 2017).            |
+|System.AreaPath     |string |The area path under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.|
+|System.IterationPath|string |The iteration under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.|
+|customFields        |object |Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.).                              |
