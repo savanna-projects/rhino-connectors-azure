@@ -13,8 +13,11 @@ using Rhino.Connectors.Azure.Framework;
 
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -117,23 +120,19 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 ["System.Title"] = testCase.Scenario,
                 ["Microsoft.VSTS.Common.Priority"] = priorityOut,
-                ["Microsoft.VSTS.TCM.Steps"] = GetStepsHtml(testCase),
-                ["Microsoft.VSTS.TCM.LocalDataSource"] = GetDataSourceXml(testCase)
+                ["Microsoft.VSTS.TCM.Steps"] = GetStepsHtml(testCase)
             };
 
             // fields: area path
             var areaPath = options.GetCastedValueOrDefault("System.AreaPath", string.Empty);
-            if (!string.IsNullOrEmpty(areaPath))
-            {
-                data["System.AreaPath"] = areaPath;
-            }
+            AddToData(data, field: "System.AreaPath", value: areaPath);
 
             // fields: iteration path
             var iterationPathPath = options.GetCastedValueOrDefault("System.IterationPath", string.Empty);
-            if (!string.IsNullOrEmpty(iterationPathPath))
-            {
-                data["System.IterationPath"] = iterationPathPath;
-            }
+            AddToData(data, field: "System.IterationPath", value: iterationPathPath);
+
+            // fields: data
+            AddToData(data, field: "Microsoft.VSTS.TCM.LocalDataSource", value: GetDataSourceXml(testCase));
 
             // concat
             data = data.AddRange(customFields);
@@ -174,6 +173,41 @@ namespace Rhino.Connectors.Azure.Extensions
                 "<description/>" +
                 "</step>";
         }
+
+        private static string GetDataSourceXml(RhinoTestCase testCase)
+        {
+            // exit conditions
+            if (testCase.DataSource?.Any() == false)
+            {
+                return string.Empty;
+            }
+
+            // setup
+            var dataTable = testCase.DataSource.ToDataTable();
+            var dataSet = new DataSet();
+
+            // add table
+            dataSet.Tables.Add(dataTable);
+
+            // write
+            using var stream = new MemoryStream();
+            dataSet.WriteXml(stream);
+
+            // get
+            return Encoding.UTF8.GetString(stream.ToArray());
+        }
+
+        private static void AddToData<T>(IDictionary<string, object> data, string field, T value)
+        {
+            // exit conditions
+            if(value == null || string.IsNullOrEmpty($"{value}"))
+            {
+                return;
+            }
+
+            // add
+            data[field] = value;
+        }
         #endregion
 
         #region *** JSON Bug Document  ***
@@ -202,11 +236,6 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // results
             return patchDocument;
-        }
-
-        private static string GetDataSourceXml(RhinoTestCase rhinoTestCase)
-        {
-            return string.Empty;
         }
     }
 }

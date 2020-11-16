@@ -162,7 +162,7 @@ namespace Rhino.Connectors.Azure
             var itemsToFind = ids.ToNumbers();
 
             // parse
-            itemsToFind = GetTestCases(ids: itemsToFind).Select(i => i.Id.AsInt());
+            itemsToFind = GetTestCases(ids: itemsToFind).Select(i => i.Id.ToInt());
 
             // get
             return wiClient.GetRhinoTestCases(ids: itemsToFind);
@@ -196,7 +196,7 @@ namespace Rhino.Connectors.Azure
             var groups = testCases.Split(100);
             Parallel.ForEach(groups, options, group =>
             {
-                var items = GetTestCases(group).Select(i => i.Id.AsInt());
+                var items = GetTestCases(group).Select(i => i.Id.ToInt());
                 var range = wiClient.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
@@ -253,7 +253,7 @@ namespace Rhino.Connectors.Azure
             var groups = itemsToFind.Split(100);
             Parallel.ForEach(groups, options, group =>
             {
-                var items = GetTestCases(group).Select(i => i.Id.AsInt());
+                var items = GetTestCases(group).Select(i => i.Id.ToInt());
                 var range = wiClient.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
@@ -292,7 +292,7 @@ namespace Rhino.Connectors.Azure
             logger?.Debug($"Get-ByQueries = {itemsToFind.Count}");
 
             // get
-            var items = GetTestCases(testCases).Select(i => i.Id.AsInt());
+            var items = GetTestCases(testCases).Select(i => i.Id.ToInt());
             return wiClient.GetRhinoTestCases(ids: items);
         }
 
@@ -332,7 +332,7 @@ namespace Rhino.Connectors.Azure
                 .GetAwaiter()
                 .GetResult();
             var itemResult = JsonConvert.SerializeObject(item);
-            var id = $"{item.Id.AsInt()}";
+            var id = $"{item.Id.ToInt()}";
 
             // exit conditions
             if (!testCase.TestSuites.Any())

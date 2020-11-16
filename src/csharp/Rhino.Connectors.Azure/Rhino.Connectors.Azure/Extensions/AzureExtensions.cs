@@ -9,6 +9,7 @@ using HtmlAgilityPack;
 
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
+using Microsoft.VisualStudio.Services.Common;
 
 using Rhino.Api.Contracts.AutomationProvider;
 
@@ -102,7 +103,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return DoGetRhinoTestCases(client, ids);
         }
 
-        private static IEnumerable< RhinoTestCase> DoGetRhinoTestCases(WorkItemTrackingHttpClient client, IEnumerable<int> ids)
+        private static IEnumerable<RhinoTestCase> DoGetRhinoTestCases(WorkItemTrackingHttpClient client, IEnumerable<int> ids)
         {
             // setup
             var items = client
@@ -122,18 +123,19 @@ namespace Rhino.Connectors.Azure.Extensions
                 stepsDocument.LoadHtml(stepsHtml);
 
                 // put
-                var rhinoTestCase = new RhinoTestCase
+                var testCase = new RhinoTestCase
                 {
                     Key = $"{item.Id}"
                 };
-                rhinoTestCase.Scenario = DoGetField(item, "System.Title", string.Empty);
-                rhinoTestCase.Priority = $"{DoGetField<long>(item, "Microsoft.VSTS.Common.Priority", 2)}";
-                rhinoTestCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
-                rhinoTestCase.TotalSteps = rhinoTestCase.Steps.Count();
-                rhinoTestCase.DataSource = DoGetDataSource(item);
+                testCase.Scenario = DoGetField(item, "System.Title", string.Empty);
+                testCase.Priority = $"{DoGetField<long>(item, "Microsoft.VSTS.Common.Priority", 2)}";
+                testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
+                testCase.TotalSteps = testCase.Steps.Count();
+                testCase.DataSource = DoGetDataSource(item);
+                testCase.Context["workItem"] = item;
 
                 // put
-                testCases.Add(rhinoTestCase);
+                testCases.Add(testCase);
             }
 
             // get
@@ -209,7 +211,15 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<IDictionary<string, object>> DoGetDataSource(WorkItem item)
         {
             // setup
-            var xsd = $"{item.Fields["Microsoft.VSTS.TCM.LocalDataSource"]}";
+            var xsd = item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.TCM.LocalDataSource", string.Empty);
+
+            // exit conditions
+            if (string.IsNullOrEmpty(xsd))
+            {
+                return Array.Empty<IDictionary<string, object>>();
+            }
+
+            // setup
             var stream = new MemoryStream(Encoding.UTF8.GetBytes(xsd));
 
             // read
