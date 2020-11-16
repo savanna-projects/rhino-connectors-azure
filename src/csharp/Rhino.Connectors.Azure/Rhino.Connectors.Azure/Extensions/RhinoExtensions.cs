@@ -9,6 +9,7 @@ using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
+using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Framework;
 
 using System;
@@ -51,6 +52,21 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
+        /// Gets the TestConfiguration.Id from connector options or -1 if not exists.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration by which to get <see cref="VssCredentials"/>.</param>
+        /// <returns>TestConfiguration.Id to use when executing the current configuration.</returns>
+        public static int GetTestConfiguration(this RhinoConfiguration configuration)
+        {
+            // setup
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+
+            // get
+            return options.GetCastedValueOrDefault(AzureCapability.TestConfiguration, -1);
+        }
+
+        /// <summary>
         /// Adds an item to RhinoTestCase.Context, replacing existing one if already present.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to add to.</param>
@@ -84,7 +100,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var optionsKey = $"{Connector.AzureTestManager}:options";
             var options = testCase.Context.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
-            var fields = options.GetCastedValueOrDefault("customFields", new Dictionary<string, object>());
+            var fields = options.GetCastedValueOrDefault(AzureCapability.CustomFields, new Dictionary<string, object>());
 
             // get
             return DoAsTestDocument(testCase, fields);
@@ -101,7 +117,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var optionsKey = $"{Connector.AzureTestManager}:options";
             var options = testCase.Context.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
-            var fields = options.GetCastedValueOrDefault("customFields", new Dictionary<string, object>()).AddRange(customFields);
+            var fields = options.GetCastedValueOrDefault(AzureCapability.CustomFields, new Dictionary<string, object>()).AddRange(customFields);
 
             // get
             return DoAsTestDocument(testCase, fields);
@@ -124,11 +140,11 @@ namespace Rhino.Connectors.Azure.Extensions
             };
 
             // fields: area path
-            var areaPath = options.GetCastedValueOrDefault("System.AreaPath", string.Empty);
+            var areaPath = options.GetCastedValueOrDefault(AzureCapability.AreaPath, string.Empty);
             AddToData(data, field: "System.AreaPath", value: areaPath);
 
             // fields: iteration path
-            var iterationPathPath = options.GetCastedValueOrDefault("System.IterationPath", string.Empty);
+            var iterationPathPath = options.GetCastedValueOrDefault(AzureCapability.IterationPath, string.Empty);
             AddToData(data, field: "System.IterationPath", value: iterationPathPath);
 
             // fields: data

@@ -211,7 +211,10 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<IDictionary<string, object>> DoGetDataSource(WorkItem item)
         {
             // setup
-            var xsd = item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.TCM.LocalDataSource", string.Empty);
+            var xsd = item
+                .Fields
+                .GetCastedValueOrDefault("Microsoft.VSTS.TCM.LocalDataSource", string.Empty)
+                .Replace(" encoding=\"utf-16\"", string.Empty);
 
             // exit conditions
             if (string.IsNullOrEmpty(xsd))

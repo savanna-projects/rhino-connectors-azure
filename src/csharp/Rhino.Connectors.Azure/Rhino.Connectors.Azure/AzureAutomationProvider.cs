@@ -21,6 +21,7 @@ using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
 using Rhino.Api.Contracts.Extensions;
 using Rhino.Api.Extensions;
+using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Extensions;
 
 using System;
@@ -148,7 +149,7 @@ namespace Rhino.Connectors.Azure
             }
             catch (Exception e) when (e != null)
             {
-                logger?.Error("Get-TestCases = Error");
+                logger?.Error($"Get-TestCases = {e.GetBaseException().Message}");
             }
             return testCases;
         }
@@ -343,7 +344,7 @@ namespace Rhino.Connectors.Azure
             // setup: add to suites
             var optionsKey = $"{Connector.AzureTestManager}:options";
             var options = testCase.Context.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
-            var testPlan = options.GetCastedValueOrDefault("testPlan", 0);
+            var testPlan = options.GetCastedValueOrDefault(AzureCapability.TestPlan, 0);
 
             // add
             foreach (var testSuite in testCase.TestSuites.AsNumbers())
@@ -376,6 +377,68 @@ namespace Rhino.Connectors.Azure
                     $"-TestSuite {testSuite} " +
                     $"-TestCase {testCase} = {e.GetBaseException().Message}";
                 logger?.Error(message);
+            }
+        }
+        #endregion
+
+        #region *** Configuration     ***
+        /// <summary>
+        /// Implements a mechanism of setting a testing configuration for an automation provider.
+        /// </summary>
+        /// <remarks>Use this method for <see cref="SetConfiguration"/> customization.</remarks>
+        public override void OnSetConfiguration()
+        {
+            // setup
+            const string ConfigurationName = "Rhino - Automation Configuration";
+            TestRun ??= new RhinoTestRun();
+            TestRun.Context ??= new Dictionary<string, object>();
+
+            // from capabilites
+            var id = Configuration.GetTestConfiguration();
+            if (id != -1)
+            {
+                TestRun.Context["testConfigurationId"] = id;
+                logger?.Debug($"Set-Configuration -FromCapabilites {id} = OK");
+                return;
+            }
+
+            // get or create
+            try
+            {
+                var testConfiguration = tpClient
+                    .GetTestConfigurationsWithContinuationTokenAsync(Configuration.ConnectorConfiguration.Project)
+                    .GetAwaiter()
+                    .GetResult()
+                    .FirstOrDefault(i => i.Name.Equals(ConfigurationName, Compare));
+
+                if (testConfiguration != default)
+                {
+                    TestRun.Context[nameof(testConfiguration)] = testConfiguration;
+                    return;
+                }
+
+                var parameters = new Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfigurationCreateUpdateParameters()
+                {
+                    Description = "Automation configuration for running test cases under Rhino API.",
+                    IsDefault = false,
+                    State = TestConfigurationState.Active,
+                    Name = ConfigurationName
+                };
+                testConfiguration = tpClient
+                    .CreateTestConfigurationAsync(parameters, Configuration.ConnectorConfiguration.Project)
+                    .GetAwaiter()
+                    .GetResult();
+
+                logger?.Debug($"Set-Configuration -Name {ConfigurationName} -Create = {testConfiguration.Id}");
+                TestRun.Context[nameof(testConfiguration)] = testConfiguration;
+            }
+            catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
+            {
+                logger?.Warn($"Set-Configuration -Name {ConfigurationName} = NotSupported");
+            }
+            catch (Exception e) when (e != null)
+            {
+                logger?.Error($"Set-Configuration -Name {ConfigurationName} = {e.GetBaseException().Message}");
             }
         }
         #endregion
