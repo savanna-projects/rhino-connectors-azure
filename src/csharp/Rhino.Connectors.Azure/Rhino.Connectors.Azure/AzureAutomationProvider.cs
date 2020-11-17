@@ -562,7 +562,7 @@ namespace Rhino.Connectors.Azure
                 testPoints.AddRange(range);
             });
 
-            // get
+            // get            
             return testPoints;
         }
 
