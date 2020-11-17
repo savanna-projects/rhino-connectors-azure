@@ -67,5 +67,15 @@ namespace Rhino.Connectors.Azure.Extensions
             .Replace("&amp;", "")
             .Replace("nbsp;", "")
             .Replace("<BR/>", "\n");
+
+        //// TODO: add documentation
+        //public static T Clone<T>(this T obj)
+        //{
+        //    // setup
+        //    var json = JsonConvert.SerializeObject(obj);
+
+        //    // get
+        //    return JsonConvert.DeserializeObject<T>(json);
+        //}
     }
 }

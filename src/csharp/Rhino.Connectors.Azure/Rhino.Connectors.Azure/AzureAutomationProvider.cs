@@ -8,6 +8,7 @@
 using Gravity.Abstraction.Logging;
 using Gravity.Extensions;
 
+using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
@@ -50,6 +51,7 @@ namespace Rhino.Connectors.Azure
         // members: clients
         private readonly WorkItemTrackingHttpClient wiClient;
         private readonly TestManagementHttpClient tmClient;
+        private readonly IdentityMruHttpClient idClient;
         private readonly Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient tpClient;
 
         // members
@@ -92,6 +94,7 @@ namespace Rhino.Connectors.Azure
             // create clients
             wiClient = connection.GetClient<WorkItemTrackingHttpClient>();
             tmClient = connection.GetClient<TestManagementHttpClient>();
+            idClient = connection.GetClient<IdentityMruHttpClient>();
             tpClient = connection.GetClient<Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient>();
         }
         #endregion
@@ -342,9 +345,7 @@ namespace Rhino.Connectors.Azure
             }
 
             // setup: add to suites
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = testCase.Context.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
-            var testPlan = options.GetCastedValueOrDefault(AzureCapability.TestPlan, 0);
+            var testPlan = Configuration.GetAzureCapability(AzureCapability.TestPlan, 0);
 
             // add
             foreach (var testSuite in testCase.TestSuites.AsNumbers())
@@ -390,15 +391,12 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             const string ConfigurationName = "Rhino - Automation Configuration";
-            TestRun ??= new RhinoTestRun();
-            TestRun.Context ??= new Dictionary<string, object>();
 
             // from capabilites
-            var id = Configuration.GetTestConfiguration();
+            var id = GetConfigurationId();
             if (id != -1)
             {
-                TestRun.Context["testConfigurationId"] = id;
-                logger?.Debug($"Set-Configuration -FromCapabilites {id} = OK");
+                AddConfigurationToTestContext(id);
                 return;
             }
 
@@ -431,6 +429,8 @@ namespace Rhino.Connectors.Azure
 
                 logger?.Debug($"Set-Configuration -Name {ConfigurationName} -Create = {testConfiguration.Id}");
                 TestRun.Context[nameof(testConfiguration)] = testConfiguration;
+
+                id = testConfiguration.Id;
             }
             catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
             {
@@ -440,6 +440,139 @@ namespace Rhino.Connectors.Azure
             {
                 logger?.Error($"Set-Configuration -Name {ConfigurationName} = {e.GetBaseException().Message}");
             }
+
+            // put to context
+            AddConfigurationToTestContext(id);
+        }
+
+        private int GetConfigurationId()
+        {
+            // setup
+            TestRun ??= new RhinoTestRun();
+            TestRun.Context ??= new Dictionary<string, object>();
+
+            // from capabilites
+            var id = Configuration.GetAzureCapability(AzureCapability.TestConfiguration, -1);
+
+            // set
+            if (id != -1)
+            {
+                logger?.Debug($"Get-Configuration -FromCapabilites {id} = OK");
+            }
+            else
+            {
+                logger?.Debug($"Set-Configuration -Default {id} = OK");
+            }
+
+            // get
+            return id;
+        }
+
+        private void AddConfigurationToTestContext(int id)
+        {
+            // test run
+            TestRun.Context["testConfigurationId"] = id;
+
+            // test cases
+            foreach (var testCase in TestRun.TestCases)
+            {
+                testCase.Context["testConfigurationId"] = id;
+            }
+        }
+        #endregion
+
+        #region *** Test Run          ***
+        /// <summary>
+        /// Creates an automation provider test run entity. Use this method to implement the automation
+        /// provider test run creation and to modify the loaded Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.
+        /// </summary>
+        /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun object to modify before creating.</param>
+        /// <returns>Rhino.Api.Contracts.AutomationProvider.RhinoTestRun based on provided test cases.</returns>
+        public override RhinoTestRun OnCreateTestRun(RhinoTestRun testRun)
+        {
+            // create
+            try
+            {
+                DoCreateTestRun(testRun);
+            }
+            catch (Exception e) when (e != null)
+            {
+                Configuration.ConnectorConfiguration.DryRun = true;
+                logger?.Error($"Create-TestRun = {e.GetBaseException().Message}");
+            }
+
+            // get
+            return testRun;
+        }
+
+        private void DoCreateTestRun(RhinoTestRun testRun)
+        {
+            // setup
+            var createModel = GetCreateModel();
+
+            // create
+            var onTestRun = tmClient
+                .CreateTestRunAsync(createModel, Configuration.ConnectorConfiguration.Project)
+                .GetAwaiter()
+                .GetResult();
+
+            // add results
+            testRun.Key = $"{onTestRun.Id}";
+            testRun.Context[nameof(testRun)] = onTestRun;
+        }
+
+        private RunCreateModel GetCreateModel()
+        {
+            // setup
+            var plan = Configuration.GetAzureCapability(AzureCapability.TestPlan, -1);
+
+            // get
+            try
+            {
+                var points = GetAllTestPoints().Select(i => i.Id).ToArray();
+
+                return plan == -1
+                    ? new RunCreateModel(name: TestRun.Title, pointIds: points)
+                    : new RunCreateModel(name: TestRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
+            }
+            catch (Exception e) when (e != null)
+            {
+                var message = $"Create-TestRun -Plan {plan} = {e.GetBaseException().Message}";
+                logger.Fatal(message, e);
+                throw new InvalidOperationException(message);
+            }
+        }
+
+        private IEnumerable<TestPoint> GetAllTestPoints()
+        {
+            // setup
+            var project = Configuration.ConnectorConfiguration.Project;
+            var testCasesGroups = TestRun.TestCases.Split(100);
+            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
+            var testPoints = new ConcurrentBag<TestPoint>();
+
+            // get
+            Parallel.ForEach(testCasesGroups, options, testCases =>
+            {
+                var ids = testCases.Select(i => i.Key).Distinct().AsNumbers().ToList();
+                var filter = new PointsFilter { TestcaseIds = ids };
+                var query = new TestPointsQuery() { PointsFilter = filter };
+
+                var range = tmClient.GetPointsByQueryAsync(query, project).GetAwaiter().GetResult().Points;
+                testPoints.AddRange(range);
+            });
+
+            // get
+            return testPoints;
+        }
+
+        /// <summary>
+        /// Completes automation provider test run results, if any were missed or bypassed.
+        /// </summary>
+        /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun results object to complete by.</param>
+        public override void OnCompleteTestRun(RhinoTestRun testRun)
+        {
+
         }
         #endregion
     }

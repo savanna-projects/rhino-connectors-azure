@@ -7,9 +7,12 @@ using Gravity.Extensions;
 
 using HtmlAgilityPack;
 
+using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
+
+using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 

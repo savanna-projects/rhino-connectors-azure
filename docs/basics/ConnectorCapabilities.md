@@ -29,16 +29,14 @@ The options must be passed under `<connector_name>:options` key, as follow:
 }
 ...
 ```  
-testConfiguration
-System.IterationPath
 
-|Name                |Type   |Description                                                                                                                |
-|--------------------|-------|---------------------------------------------------------------------------------------------------------------------------|
-|areaPath            |string |The area path under which items will be created (tests, bugs, etc.). If not selected, default value will be used.          |
-|iterationPath       |string |The iteration under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.           |
+|Name                |Type   |Description                                                                                                                     |
+|--------------------|-------|--------------------------------------------------------------------------------------------------------------------------------|
+|areaPath            |string |The area path under which items will be created (tests, bugs, etc.). If not selected, default value will be used.               |
+|iterationPath       |string |The iteration under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.                |
 |customFields        |object |Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.). The fields names must be system fields names.|
-|testPlan            |number |The test plan ID to use. If set, tests will be created under this plan.                       |
-|testConfiguration   |number |The test configuration ID which will be used when running the current tests. If not selected, defaults values will be used.|
+|testPlan            |number |The test plan ID to use. If set, tests will be created under this plan. _**Mandatory for creating test runs on TFS 2017**_.     |
+|testConfiguration   |number |The test configuration ID which will be used when running the current tests. If not selected, defaults values will be used.     |
 
 ## See Also
 [Azure DevOps, Fields - List](https://docs.microsoft.com/en-us/rest/api/azure/devops/wit/fields/list?view=azure-devops-rest-5.1)

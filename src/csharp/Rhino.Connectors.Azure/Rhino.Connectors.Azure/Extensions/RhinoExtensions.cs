@@ -3,6 +3,7 @@
  * 
  * RESOURCES
  */
+using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
@@ -19,6 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -27,6 +29,40 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class RhinoExtensions
     {
+        #region *** Test Case Results  ***
+        /// <summary>
+        /// Gets a basic <see cref="TestCaseResult"/> object.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to create <see cref="TestCaseResult"/>.</param>
+        /// <returns><see cref="TestCaseResult"/> object.</returns>
+        public static TestCaseResult ToTestCaseResult(this RhinoTestCase testCase)
+        {
+            // setup
+            int.TryParse(Regex.Match(testCase.Priority, @"\d+").Value, out int priority);
+            var configuration = testCase.Context.GetCastedValueOrDefault("testConfigurationId", -1);
+
+            // build
+            var testCaseResults = new TestCaseResult
+            {
+                TestCaseTitle = testCase.Scenario,
+                TestCase = new ShallowReference(id: testCase.Key),
+                Comment = "Automatically created by Rhino engine.",
+                ComputerName = Environment.MachineName,
+                Outcome = nameof(TestOutcome.Paused),
+                Priority = priority
+            };
+
+            // put
+            if (configuration != -1)
+            {
+                testCaseResults.Configuration = new ShallowReference(id: $"{configuration}");
+            }
+
+            // get
+            return testCaseResults;
+        }
+        #endregion
+
         /// <summary>
         /// Gets <see cref="VssCredentials"/> by RhinoConfiguration.ConnectorConfiguration.
         /// </summary>
@@ -51,19 +87,16 @@ namespace Rhino.Connectors.Azure.Extensions
                 : CredentialsFactory.GetVssCredentials(userName, password);
         }
 
-        /// <summary>
-        /// Gets the TestConfiguration.Id from connector options or -1 if not exists.
-        /// </summary>
-        /// <param name="configuration">RhinoConfiguration by which to get <see cref="VssCredentials"/>.</param>
-        /// <returns>TestConfiguration.Id to use when executing the current configuration.</returns>
-        public static int GetTestConfiguration(this RhinoConfiguration configuration)
+        // TODO: add comments
+        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
         {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+            return DoGetAzureCapability(configuration, capability, defaultValue);
+        }
 
-            // get
-            return options.GetCastedValueOrDefault(AzureCapability.TestConfiguration, -1);
+        // TODO: add comments
+        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
+        {
+            DoAddAzureCapability(configuration, capability, value);
         }
 
         /// <summary>
@@ -154,7 +187,7 @@ namespace Rhino.Connectors.Azure.Extensions
             data = data.AddRange(customFields);
 
             // get
-            return GetDocument(data);
+            return AzureUtilities.GetJsonPatchDocument(data);
         }
 
         private static string GetStepsHtml(RhinoTestCase testCase)
@@ -216,7 +249,7 @@ namespace Rhino.Connectors.Azure.Extensions
         private static void AddToData<T>(IDictionary<string, object> data, string field, T value)
         {
             // exit conditions
-            if(value == null || string.IsNullOrEmpty($"{value}"))
+            if (value == null || string.IsNullOrEmpty($"{value}"))
             {
                 return;
             }
@@ -233,25 +266,25 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        private static JsonPatchDocument GetDocument(IDictionary<string, object> data)
+        private static T DoGetAzureCapability<T>(RhinoConfiguration configuration, string capability, T defaultValue)
         {
             // setup
-            var patchDocument = new JsonPatchDocument();
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
 
-            // iterate
-            foreach (var field in data)
-            {
-                var operation = new JsonPatchOperation()
-                {
-                    Operation = Operation.Add,
-                    Path = $"/fields/{field.Key}",
-                    Value = $"{field.Value}"
-                };
-                patchDocument.Add(item: operation);
-            }
+            // get
+            return options.GetCastedValueOrDefault(capability, defaultValue);
+        }
 
-            // results
-            return patchDocument;
+        private static void DoAddAzureCapability(RhinoConfiguration configuration, string capability, object value)
+        {
+            // setup
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+
+            // put
+            options[capability] = value;
+            configuration.Capabilities[optionsKey] = options;
         }
     }
 }

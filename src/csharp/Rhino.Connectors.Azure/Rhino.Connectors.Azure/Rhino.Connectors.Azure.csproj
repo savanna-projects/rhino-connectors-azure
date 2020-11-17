@@ -15,10 +15,9 @@
   </PropertyGroup>
   
   <ItemGroup>
-    <PackageReference Include="Microsoft.TeamFoundationServer.ExtendedClient" Version="16.153.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Services.Client" Version="16.153.0" />
-    <PackageReference Include="Rhino.Api" Version="2020.11.8.1" />
     <PackageReference Include="Microsoft.TeamFoundationServer.Client" Version="16.153.0" />
+    <PackageReference Include="Microsoft.VisualStudio.Services.Client" Version="16.153.0" />
+    <PackageReference Include="Rhino.Api" Version="2020.11.8.1" />    
     <PackageReference Include="Rhino.Connectors.Azure.WebApi" Version="16.162.29627.1" />
   </ItemGroup>
 
