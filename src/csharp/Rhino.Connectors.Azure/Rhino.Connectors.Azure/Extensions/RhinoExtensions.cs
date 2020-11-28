@@ -4,9 +4,11 @@
  * RESOURCES
  */
 using Microsoft.TeamFoundation.TestManagement.WebApi;
+using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
-using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
+
+using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
@@ -20,7 +22,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -31,35 +32,183 @@ namespace Rhino.Connectors.Azure.Extensions
     {
         #region *** Test Case Results  ***
         /// <summary>
-        /// Gets a basic <see cref="TestCaseResult"/> object.
+        /// Gets a basic <see cref="TestIterationDetailsModel"/> object.
         /// </summary>
-        /// <param name="testCase">RhinoTestCase by which to create <see cref="TestCaseResult"/>.</param>
-        /// <returns><see cref="TestCaseResult"/> object.</returns>
-        public static TestCaseResult ToTestCaseResult(this RhinoTestCase testCase)
+        /// <param name="testCase">RhinoTestCase by which to create <see cref="TestIterationDetailsModel"/>.</param>
+        /// <returns><see cref="TestIterationDetailsModel"/> object.</returns>
+        public static TestIterationDetailsModel ToTestIterationDetails(this RhinoTestCase testCase, bool setOutcome)
         {
             // setup
-            int.TryParse(Regex.Match(testCase.Priority, @"\d+").Value, out int priority);
-            var configuration = testCase.Context.GetCastedValueOrDefault("testConfigurationId", -1);
+            var iteration = new TestIterationDetailsModel
+            {
+                Id = testCase.Iteration + 1,
+                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: true),
+                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: true),
+                Comment = "Automatically Created by Rhino Engine."
+            };
+            iteration.DurationInMs = (iteration.CompletedDate - iteration.StartedDate).TotalMilliseconds;
 
             // build
-            var testCaseResults = new TestCaseResult
-            {
-                TestCaseTitle = testCase.Scenario,
-                TestCase = new ShallowReference(id: testCase.Key),
-                Comment = "Automatically created by Rhino engine.",
-                ComputerName = Environment.MachineName,
-                Outcome = nameof(TestOutcome.Paused),
-                Priority = priority
-            };
+            iteration.ActionResults = GetActionResults(testCase, setOutcome).ToList();
+            iteration.Parameters = GetParametersResults(testCase).ToList();
 
-            // put
-            if (configuration != -1)
+            // outcome
+            if (setOutcome)
             {
-                testCaseResults.Configuration = new ShallowReference(id: $"{configuration}");
+                iteration.Outcome = testCase.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
+            }
+
+            // context update
+            testCase.Context[AzureContextEntry.IterationDetails] = iteration;
+
+            // get
+            return iteration;
+        }
+
+        // get TestActionResultModel
+        private static IEnumerable<TestActionResultModel> GetActionResults(RhinoTestCase testCase, bool setOutcome)
+        {
+            // setup
+            var steps = testCase.Steps.ToList();
+            var actionResults = new List<TestActionResultModel>();
+
+            // build - actions
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var id = steps[i].Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepId, -1);
+                var isShared = steps[i].Context.ContainsKey(AzureContextEntry.SharedStep);
+                var isAdded = isShared && actionResults.Any(i => IsSharedStepModel(i, id));
+                var iteration = testCase.Iteration + 1;
+
+                if (!isAdded && isShared)
+                {
+                    var sharedModel = GetSharedActionResultModel(testStep: steps[i], iteration, setOutcome);
+                    actionResults.Add(sharedModel);
+                }
+
+                var actionModel = GetActionResultModel(testStep: steps[i], iteration, setOutcome);
+                actionResults.Add(actionModel);
             }
 
             // get
-            return testCaseResults;
+            return actionResults.OrderBy(i => i.ActionPath);
+        }
+
+        private static TestActionResultModel GetSharedActionResultModel(RhinoTestStep testStep, int iteration, bool setOutcome)
+        {
+            // setup
+            var id = testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepId, -1);
+
+            // build
+            var actionResult = new TestActionResultModel
+            {
+                ActionPath = testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepPath, "-1"),
+                IterationId = iteration,
+                SharedStepModel = new SharedStepModel { Id = id, Revision = GetSharedStepRevision(testStep) },
+                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false),
+                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: false)
+            };
+
+            // outcome
+            if (setOutcome)
+            {
+                actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
+                actionResult.CompletedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false);
+            }
+
+            // get
+            return actionResult;
+        }
+
+        private static TestActionResultModel GetActionResultModel(RhinoTestStep testStep, int iteration, bool setOutcome)
+        {
+            // setup
+            var actionPath = GetActionPath(testStep, $"{iteration}");
+
+            // build
+            var actionResult = new TestActionResultModel
+            {
+                ActionPath = actionPath,
+                IterationId = iteration,
+                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false),
+                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: false)
+            };
+
+            // outcome
+            if (setOutcome)
+            {
+                actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
+                actionResult.CompletedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false);
+            }
+
+            // get
+            return actionResult;
+        }
+
+        // get TestResultParameterModel
+        private static IEnumerable<TestResultParameterModel> GetParametersResults(RhinoTestCase testCase)
+        {
+            // build - parameters
+            var steps = testCase.Steps.ToList();
+            var iteration = testCase.Iteration + 1;
+            var parameterResults = new List<TestResultParameterModel>();
+
+            // build
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var actionPath = GetActionPath(steps[i], $"{iteration}");
+                var identifier = GetStepIdentifier(steps[i], $"{iteration}");
+                var parameters = GetParameters(steps[i], testCase.DataSource);
+
+                var range = parameters.Select(i => new TestResultParameterModel
+                {
+                    ActionPath = actionPath,
+                    IterationId = iteration,
+                    ParameterName = i.Name,
+                    Value = i.Value,
+                    StepIdentifier = identifier
+                });
+
+                parameterResults.AddRange(range);
+            }
+
+            // get
+            return parameterResults;
+        }
+
+        private static IEnumerable<(string Name, string Value)> GetParameters(
+            RhinoTestStep step,
+            IEnumerable<IDictionary<string, object>> data)
+        {
+            // setup
+            var onStep = JsonConvert.SerializeObject(step);
+            var parameters = new List<(string Name, string Value)>();
+
+            // iterate
+            foreach (var item in data)
+            {
+                foreach (var key in item.Keys)
+                {
+                    var isValue = onStep.Contains($"{item[key]}");
+                    if (isValue)
+                    {
+                        parameters.Add((Name: key, Value: $"{item[key]}"));
+                    }
+                }
+            }
+
+            // get
+            return parameters;
+        }
+
+        // utilities
+        private static bool IsSharedStepModel(TestActionResultModel testAction, int id)
+        {
+            // setup conditions
+            var isModel = testAction.SharedStepModel != null;
+
+            // get
+            return isModel && testAction.SharedStepModel.Id == id;
         }
         #endregion
 
@@ -285,6 +434,31 @@ namespace Rhino.Connectors.Azure.Extensions
             // put
             options[capability] = value;
             configuration.Capabilities[optionsKey] = options;
+        }
+
+        private static string GetActionPath(RhinoTestStep testStep, string defaultValue)
+        {
+            return testStep.Context.ContainsKey(AzureContextEntry.SharedStepActionPath)
+                ? testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepActionPath, defaultValue)
+                : testStep.Context.GetCastedValueOrDefault(AzureContextEntry.ActionPath, defaultValue);
+        }
+
+        private static string GetStepIdentifier(RhinoTestStep testStep, string defaultValue)
+        {
+            return testStep.Context.ContainsKey(AzureContextEntry.SharedStepIdentifier)
+                ? testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepIdentifier, defaultValue)
+                : testStep.Context.GetCastedValueOrDefault(AzureContextEntry.StepRuntime, defaultValue);
+        }
+
+        private static int GetSharedStepRevision(RhinoTestStep testStep)
+        {
+            // setup
+            var item = testStep.Context.ContainsKey(AzureContextEntry.SharedStep)
+                ? testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStep, new WorkItem())
+                : new WorkItem();
+
+            // get
+            return item.Rev == null || item.Rev == 0 ? 1 : item.Rev.ToInt();
         }
     }
 }

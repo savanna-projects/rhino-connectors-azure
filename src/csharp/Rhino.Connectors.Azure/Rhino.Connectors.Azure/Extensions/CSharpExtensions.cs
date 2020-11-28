@@ -3,6 +3,7 @@
  * 
  * RESOURCES
  */
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
@@ -68,14 +69,16 @@ namespace Rhino.Connectors.Azure.Extensions
             .Replace("nbsp;", "")
             .Replace("<BR/>", "\n");
 
-        //// TODO: add documentation
-        //public static T Clone<T>(this T obj)
-        //{
-        //    // setup
-        //    var json = JsonConvert.SerializeObject(obj);
-
-        //    // get
-        //    return JsonConvert.DeserializeObject<T>(json);
-        //}
+        /// <summary>
+        /// UTC - ISO 8601 (2012-03-19T07:22Z) format.
+        /// </summary>
+        /// <param name="dateTime"><see cref="DateTime"/> to convert.</param>
+        /// <returns>ISO 8601 formattef.</returns>
+        public static DateTime AzureNow(this DateTime dateTime, bool addMilliseconds)
+        {
+            return addMilliseconds
+                ? new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour, dateTime.Minute, dateTime.Second, dateTime.Millisecond, dateTime.Kind)
+                : new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour, dateTime.Minute, dateTime.Second, dateTime.Kind);
+        }
     }
 }

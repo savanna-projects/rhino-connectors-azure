@@ -32,6 +32,7 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using Utilities = Rhino.Api.Extensions.Utilities;
@@ -49,13 +50,13 @@ namespace Rhino.Connectors.Azure
         private const Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes TestEntryType = Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes.TestCase;
 
         // members: clients
-        private readonly WorkItemTrackingHttpClient wiClient;
-        private readonly TestManagementHttpClient tmClient;
-        private readonly IdentityMruHttpClient idClient;
-        private readonly Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient tpClient;
+        private readonly WorkItemTrackingHttpClient itemManagement;
+        private readonly TestManagementHttpClient testManagement;
+        private readonly Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient planManagement;
 
         // members
         private readonly ILogger logger;
+        private readonly string project;
 
         #region *** Constructors      ***
         /// <summary>
@@ -90,12 +91,19 @@ namespace Rhino.Connectors.Azure
             var connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
+            project = configuration.ConnectorConfiguration.Project;
+
+            // cache project
+            var projectManagement = connection.GetClient<ProjectHttpClient>();
+            TestRun.Context[AzureContextEntry.Project] = projectManagement.GetProjects(ProjectState.All)
+                .GetAwaiter()
+                .GetResult()
+                .FirstOrDefault(i => i.Name.Equals(Configuration.ConnectorConfiguration.Project, StringComparison.OrdinalIgnoreCase));
 
             // create clients
-            wiClient = connection.GetClient<WorkItemTrackingHttpClient>();
-            tmClient = connection.GetClient<TestManagementHttpClient>();
-            idClient = connection.GetClient<IdentityMruHttpClient>();
-            tpClient = connection.GetClient<Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient>();
+            itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
+            testManagement = connection.GetClient<TestManagementHttpClient>();
+            planManagement = connection.GetClient<Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient>();
         }
         #endregion
 
@@ -169,7 +177,7 @@ namespace Rhino.Connectors.Azure
             itemsToFind = GetTestCases(ids: itemsToFind).Select(i => i.Id.ToInt());
 
             // get
-            return wiClient.GetRhinoTestCases(ids: itemsToFind);
+            return itemManagement.GetRhinoTestCases(ids: itemsToFind);
         }
 
         [Description(GetTestCasesMethod)]
@@ -181,12 +189,11 @@ namespace Rhino.Connectors.Azure
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testCases = new ConcurrentBag<int>();
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
-            var project = Configuration.ConnectorConfiguration.Project;
 
             // get: all test cases ids
             Parallel.ForEach(itemsToFind, options, id =>
             {
-                var range = tpClient
+                var range = planManagement
                     .GetSuiteEntriesAsync(project, id, TestEntryType)
                     .GetAwaiter()
                     .GetResult()
@@ -201,7 +208,7 @@ namespace Rhino.Connectors.Azure
             Parallel.ForEach(groups, options, group =>
             {
                 var items = GetTestCases(group).Select(i => i.Id.ToInt());
-                var range = wiClient.GetRhinoTestCases(ids: items);
+                var range = itemManagement.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -226,7 +233,7 @@ namespace Rhino.Connectors.Azure
             {
                 try
                 {
-                    var testSuites = tpClient.GetTestSuitesForPlanWithContinuationTokenAsync(project, id).GetAwaiter().GetResult();
+                    var testSuites = planManagement.GetTestSuitesForPlanWithContinuationTokenAsync(project, id).GetAwaiter().GetResult();
                     var suites = testSuites.Select(i => i.Id);
                     suitesByPlans.Add((Plan: id, Suites: suites));
                 }
@@ -243,7 +250,7 @@ namespace Rhino.Connectors.Azure
             {
                 Parallel.ForEach(suiteByPlan.Suites, options, suite =>
                 {
-                    var onTestCases = tmClient.GetTestCasesAsync(project, suiteByPlan.Plan, suite).GetAwaiter().GetResult();
+                    var onTestCases = testManagement.GetTestCasesAsync(project, suiteByPlan.Plan, suite).GetAwaiter().GetResult();
                     var range = onTestCases.Select(i => i.Workitem.Id);
                     testCases.AddRange(range);
                 });
@@ -258,7 +265,7 @@ namespace Rhino.Connectors.Azure
             Parallel.ForEach(groups, options, group =>
             {
                 var items = GetTestCases(group).Select(i => i.Id.ToInt());
-                var range = wiClient.GetRhinoTestCases(ids: items);
+                var range = this.itemManagement.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -273,7 +280,6 @@ namespace Rhino.Connectors.Azure
             // setup
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testCases = new ConcurrentBag<int>();
-            var project = Configuration.ConnectorConfiguration.Project;
 
             // get: suites and plans
             Parallel.ForEach(queries, options, query =>
@@ -281,7 +287,7 @@ namespace Rhino.Connectors.Azure
                 try
                 {
                     var wiql = new Wiql() { Query = query };
-                    var queryResults = wiClient.QueryByWiqlAsync(wiql, project).GetAwaiter().GetResult();
+                    var queryResults = itemManagement.QueryByWiqlAsync(wiql, project).GetAwaiter().GetResult();
                     var range = queryResults.WorkItems.Select(i => i.Id);
                     testCases.AddRange(range);
                 }
@@ -297,7 +303,7 @@ namespace Rhino.Connectors.Azure
 
             // get
             var items = GetTestCases(testCases).Select(i => i.Id.ToInt());
-            return wiClient.GetRhinoTestCases(ids: items);
+            return itemManagement.GetRhinoTestCases(ids: items);
         }
 
         // get test cases by id
@@ -305,7 +311,7 @@ namespace Rhino.Connectors.Azure
         {
             try
             {
-                return wiClient
+                return itemManagement
                     .GetWorkItemsAsync(ids, fields: null, asOf: null, expand: WorkItemExpand.All)
                     .GetAwaiter()
                     .GetResult()
@@ -331,7 +337,7 @@ namespace Rhino.Connectors.Azure
             var document = testCase.AsTestDocument();
 
             // post
-            var item = wiClient
+            var item = itemManagement
                 .CreateWorkItemAsync(document, Configuration.ConnectorConfiguration.Project, TestCase)
                 .GetAwaiter()
                 .GetResult();
@@ -361,12 +367,12 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var project = Configuration.ConnectorConfiguration.Project;
-            testPlan = testPlan <= 0 ? tpClient.GetPlanForSuite(project, testSuite) : 0;
+            testPlan = testPlan <= 0 ? planManagement.GetPlanForSuite(project, testSuite) : 0;
 
             // put
             try
             {
-                tmClient
+                testManagement
                     .AddTestCasesToSuiteAsync(project, testPlan, testSuite, testCase)
                     .GetAwaiter()
                     .GetResult();
@@ -403,7 +409,7 @@ namespace Rhino.Connectors.Azure
             // get or create
             try
             {
-                var testConfiguration = tpClient
+                var testConfiguration = planManagement
                     .GetTestConfigurationsWithContinuationTokenAsync(Configuration.ConnectorConfiguration.Project)
                     .GetAwaiter()
                     .GetResult()
@@ -411,7 +417,7 @@ namespace Rhino.Connectors.Azure
 
                 if (testConfiguration != default)
                 {
-                    TestRun.Context[nameof(testConfiguration)] = testConfiguration;
+                    TestRun.Context[AzureContextEntry.TestConfiguration] = testConfiguration;
                     return;
                 }
 
@@ -422,13 +428,13 @@ namespace Rhino.Connectors.Azure
                     State = TestConfigurationState.Active,
                     Name = ConfigurationName
                 };
-                testConfiguration = tpClient
+                testConfiguration = planManagement
                     .CreateTestConfigurationAsync(parameters, Configuration.ConnectorConfiguration.Project)
                     .GetAwaiter()
                     .GetResult();
 
                 logger?.Debug($"Set-Configuration -Name {ConfigurationName} -Create = {testConfiguration.Id}");
-                TestRun.Context[nameof(testConfiguration)] = testConfiguration;
+                TestRun.Context[AzureContextEntry.TestConfiguration] = testConfiguration;
 
                 id = testConfiguration.Id;
             }
@@ -471,12 +477,12 @@ namespace Rhino.Connectors.Azure
         private void AddConfigurationToTestContext(int id)
         {
             // test run
-            TestRun.Context["testConfigurationId"] = id;
+            TestRun.Context[AzureContextEntry.ConfigurationId] = id;
 
             // test cases
             foreach (var testCase in TestRun.TestCases)
             {
-                testCase.Context["testConfigurationId"] = id;
+                testCase.Context[AzureContextEntry.ConfigurationId] = id;
             }
         }
         #endregion
@@ -493,7 +499,28 @@ namespace Rhino.Connectors.Azure
             // create
             try
             {
-                DoCreateTestRun(testRun);
+                // 1. Create Run
+                var azureTestRun = DoCreateTestRun(testRun);
+
+                // 2. Get Created Run
+                var testCaseResults = GetTestRunResults(azureTestRun);
+
+                // 3. Add Iterations                
+                foreach (var testCaseResult in testCaseResults)
+                {
+                    var testCases = testRun.TestCases.Where(i => i.Key == testCaseResult.TestCase.Id);
+                    var iterationDetails = testCases.Select(i => i.ToTestIterationDetails(false));
+                    testCaseResult.IterationDetails.AddRange(iterationDetails);
+                }
+
+                // 4. Update
+                testManagement
+                    .UpdateTestResultsAsync(testCaseResults.ToArray(), project, azureTestRun.Id)
+                    .GetAwaiter()
+                    .GetResult();
+
+                // 5. log
+                logger?.Debug($"Create-TestRun = {azureTestRun.Url}");
             }
             catch (Exception e) when (e != null)
             {
@@ -505,20 +532,23 @@ namespace Rhino.Connectors.Azure
             return testRun;
         }
 
-        private void DoCreateTestRun(RhinoTestRun testRun)
+        private TestRun DoCreateTestRun(RhinoTestRun testRun)
         {
             // setup
             var createModel = GetCreateModel();
 
             // create
-            var onTestRun = tmClient
+            var onTestRun = testManagement
                 .CreateTestRunAsync(createModel, Configuration.ConnectorConfiguration.Project)
                 .GetAwaiter()
                 .GetResult();
 
             // add results
             testRun.Key = $"{onTestRun.Id}";
-            testRun.Context[nameof(testRun)] = onTestRun;
+            testRun.Context[AzureContextEntry.TestRun] = onTestRun;
+
+            // get
+            return onTestRun;
         }
 
         private RunCreateModel GetCreateModel()
@@ -529,11 +559,11 @@ namespace Rhino.Connectors.Azure
             // get
             try
             {
+                _ = int.TryParse(TestRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
+                plan = plan == -1 ? planManagement.GetPlanForTest(project, testCaseId) : plan;
                 var points = GetAllTestPoints().Select(i => i.Id).ToArray();
 
-                return plan == -1
-                    ? new RunCreateModel(name: TestRun.Title, pointIds: points)
-                    : new RunCreateModel(name: TestRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
+                return new RunCreateModel(name: TestRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
             }
             catch (Exception e) when (e != null)
             {
@@ -546,7 +576,6 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<TestPoint> GetAllTestPoints()
         {
             // setup
-            var project = Configuration.ConnectorConfiguration.Project;
             var testCasesGroups = TestRun.TestCases.Split(100);
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testPoints = new ConcurrentBag<TestPoint>();
@@ -558,14 +587,17 @@ namespace Rhino.Connectors.Azure
                 var filter = new PointsFilter { TestcaseIds = ids };
                 var query = new TestPointsQuery() { PointsFilter = filter };
 
-                var range = tmClient.GetPointsByQueryAsync(query, project).GetAwaiter().GetResult().Points;
+                var range = testManagement.GetPointsByQueryAsync(query, project).GetAwaiter().GetResult().Points;
                 testPoints.AddRange(range);
             });
 
-            // get            
+            // get
+            logger?.Debug($"Get-TestPotints = {testPoints.Count}");
             return testPoints;
         }
+        #endregion
 
+        #region *** Update: Test Run  ***
         /// <summary>
         /// Completes automation provider test run results, if any were missed or bypassed.
         /// </summary>
@@ -575,5 +607,108 @@ namespace Rhino.Connectors.Azure
 
         }
         #endregion
+
+        // https://stackoverflow.com/questions/44495814/how-to-add-test-results-to-a-test-run-in-vsts-using-rest-api-programatically
+        // https://developercommunity.visualstudio.com/content/problem/77426/need-a-tutorial-how-to-create-test-run-and-post-te.html
+        // https://developercommunity.visualstudio.com/content/problem/602005/rest-api-to-post-steps-and-steps-result-of-test-ca.html
+        // https://stackoverflow.com/questions/44697226/how-to-add-update-individual-result-to-each-test-step-in-testcase-of-vsts-tfs-pr
+        #region *** Put: Test Run     ***
+        /// <summary>
+        /// Updates a single test results iteration under automation provider.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update results.</param>
+        public override void OnUpdateTestResult(RhinoTestCase testCase)
+        {
+            // setup
+            var project = Configuration.ConnectorConfiguration.Project;
+
+            // get test results
+            var result = testManagement.GetTestResultsAsync(project, int.Parse(TestRun.Key))
+                .GetAwaiter()
+                .GetResult()
+                .Find(i => i.TestCase.Id.Equals(testCase.Key));
+
+            // get iterations
+            // var iteration = result?.IterationDetails.Find(i => i.Id.Equals(testCase.Iteration));
+
+            // create
+            if(result.IterationDetails == default)
+            {
+                var onResults = result.Clone();
+                onResults.IterationDetails = new List<TestIterationDetailsModel>
+                {
+                    new TestIterationDetailsModel
+                    {
+                        Outcome = nameof(TestOutcome.Failed),
+                        ActionResults = new List<TestActionResultModel>
+                        {
+                            new TestActionResultModel
+                            {
+                                Outcome = nameof(TestOutcome.Passed)
+                            },
+                            new TestActionResultModel
+                            {
+                                Outcome = nameof(TestOutcome.Failed)
+                            }
+                        }
+                    }
+                };
+                var a = testManagement.UpdateTestResultsAsync(new[] { onResults }, project, int.Parse(TestRun.Key)).GetAwaiter().GetResult();
+            }
+        }
+        #endregion
+
+        #region *** Delete: Test Run  ***
+        /// <summary>
+        /// Deletes one of more an automation provider test run entity.
+        /// </summary>
+        /// <param name="testRuns">A collection of Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.Key to delete by.</param>
+        public override void DeleteTestRun(params string[] testRuns)
+        {
+            // setup
+            var ids = testRuns.Any(i => Regex.IsMatch(i, "(?i)all"))
+                ? testManagement.GetTestRunsAsync(project).GetAwaiter().GetResult().Select(i => i.Id)
+                : testRuns.AsNumbers();
+            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
+
+            // iterate
+            Parallel.ForEach(ids, options, id
+                => testManagement.DeleteTestRunAsync(project, id).GetAwaiter().GetResult());
+        }
+        #endregion
+
+        // UTILITIES
+        private IEnumerable<TestCaseResult> GetTestRunResults(TestRun testRun)
+        {
+            // setup
+            const int BatchSize = 1000;
+            var gropus = testRun.TotalTests > BatchSize ? (BatchSize / testRun.TotalTests) + 1 : 1;
+
+            // get flat results
+            var testCaseResults = new List<TestCaseResult>();
+            for (int i = 0; i < gropus; i++)
+            {
+                var range = testManagement
+                    .GetTestResultsAsync(project, testRun.Id, top: BatchSize, skip: i * BatchSize)
+                    .GetAwaiter()
+                    .GetResult();
+                testCaseResults.AddRange(range);
+            }
+
+            // get results with iterations
+            var iterations = new List<TestCaseResult>();
+            for (int i = 0; i < testCaseResults.Count; i++)
+            {
+                var id = 100000 + i;
+                var testCaseResult = testManagement
+                    .GetTestResultByIdAsync(project, testRun.Id, id, ResultDetails.Iterations)
+                    .GetAwaiter()
+                    .GetResult();
+                iterations.Add(testCaseResult);
+            }
+
+            // get
+            return iterations.Clone();
+        }
     }
 }

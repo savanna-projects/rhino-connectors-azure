@@ -7,14 +7,12 @@ using Gravity.Extensions;
 
 using HtmlAgilityPack;
 
-using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 
-using Newtonsoft.Json;
-
 using Rhino.Api.Contracts.AutomationProvider;
+using Rhino.Connectors.Azure.Contracts;
 
 using System;
 using System.Collections.Concurrent;
@@ -31,6 +29,9 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class AzureExtensions
     {
+        // constants
+        private const Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes TestEntryType = Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes.TestCase;
+
         /// <summary>
         /// Gets a field from the WorkItem.Fields collection or default value if failed.
         /// </summary>
@@ -83,6 +84,39 @@ namespace Rhino.Connectors.Azure.Extensions
             }
         }
 
+        /// <summary>
+        /// Add test cases to suite.
+        /// </summary>
+        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> client by which to find test suites.</param>
+        /// <param name="suiteId">ID of the test suite to find..</param>
+        public static int GetPlanForTest(
+            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
+            string project,
+            int testId)
+        {
+            try
+            {
+                // setup
+                var plans = client.GetTestPlansWithContinuationTokenAsync(project).GetAwaiter().GetResult();
+                var suites = plans.SelectMany(i => client.GetTestSuitesForPlanWithContinuationTokenAsync(project, i.Id).Result);
+
+                var filteredSuites = suites.Where(i => client
+                    .GetSuiteEntriesAsync(project, i.Id, TestEntryType)
+                    .GetAwaiter()
+                    .GetResult()
+                    .Any(i => i.SuiteEntryType == TestEntryType && i.Id == testId))
+                    .ToList();
+
+                // get
+                var plan = filteredSuites.FirstOrDefault()?.Plan.Id;
+                return plan == default ? 0 : plan.ToInt();
+            }
+            catch (Exception e) when (e != null)
+            {
+                return 0;
+            }
+        }
+
         #region *** Get Test Case ***
         /// <summary>
         /// Gets a RhinoTestCase based on <see cref="WorkItem"/> object.
@@ -108,6 +142,12 @@ namespace Rhino.Connectors.Azure.Extensions
 
         private static IEnumerable<RhinoTestCase> DoGetRhinoTestCases(WorkItemTrackingHttpClient client, IEnumerable<int> ids)
         {
+            // exit conditions
+            if (!ids.Any())
+            {
+                return Array.Empty<RhinoTestCase>();
+            }
+
             // setup
             var items = client
                 .GetWorkItemsAsync(ids, fields: null, asOf: null, expand: WorkItemExpand.All)
@@ -135,7 +175,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
                 testCase.TotalSteps = testCase.Steps.Count();
                 testCase.DataSource = DoGetDataSource(item);
-                testCase.Context["workItem"] = item;
+                testCase.Context[AzureContextEntry.WorkItem] = item;
 
                 // put
                 testCases.Add(testCase);
@@ -148,11 +188,11 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<RhinoTestStep> DoGetSteps(WorkItemTrackingHttpClient client, HtmlNodeCollection nodes)
         {
             // setup
-            var nodesQueue = new ConcurrentStack<HtmlNode>();
+            var nodesQueue = new ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)>();
             var testSteps = new ConcurrentBag<RhinoTestStep>();
 
             // load initial
-            nodesQueue.PushRange(nodes);
+            nodesQueue.PushRange(nodes.Select(i => (new Dictionary<string, object>(), i)));
 
             // iterate
             while (nodesQueue.Count > 0)
@@ -169,34 +209,57 @@ namespace Rhino.Connectors.Azure.Extensions
             return testSteps;
         }
 
-        private static RhinoTestStep DoGetStep(WorkItemTrackingHttpClient client, ConcurrentStack<HtmlNode> nodes)
+        private static RhinoTestStep DoGetStep(WorkItemTrackingHttpClient client, ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)> nodes)
         {
             // setup > dequeue next
-            nodes.TryPop(out HtmlNode stepOut);
+            nodes.TryPop(out (Dictionary<string, object> Context, HtmlNode Node) stepOut);
 
             // process step
-            if (stepOut.Name.Equals("step", StringComparison.OrdinalIgnoreCase))
+            if (stepOut.Node.Name.Equals("step", StringComparison.OrdinalIgnoreCase))
             {
                 return DoGetStep(step: stepOut);
             }
 
             // process shared steps
-            var shared = client.GetWorkItemAsync(int.Parse(stepOut.GetAttributeValue("ref", "0"))).GetAwaiter().GetResult();
+            var shared = client.GetWorkItemAsync(int.Parse(stepOut.Node.GetAttributeValue("ref", "0"))).GetAwaiter().GetResult();
             var doc = new HtmlDocument();
             doc.LoadHtml(shared.GetField("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml());
 
             // setup > enqueue next
-            var range = doc.DocumentNode.SelectNodes(".//steps/step").Concat(stepOut.SelectNodes("./*"));
+            var sharedStepAction = stepOut.Node.GetAttributeValue("id", "0");
+            var range = new List<(Dictionary<string, object>, HtmlNode)>();
+            foreach (var node in doc.DocumentNode.SelectNodes(".//steps/step"))
+            {
+                var runtime = node.GetAttributeValue("id", "0");
+                var path =
+                    new string('0', 8 - sharedStepAction.Length) + sharedStepAction +
+                    new string('0', 8 - runtime.Length) + runtime;
+
+                var context = new Dictionary<string, object>
+                {
+                    [AzureContextEntry.SharedStepId] = shared.Id.ToInt(),
+                    [AzureContextEntry.SharedStep] = shared,
+                    [AzureContextEntry.SharedStepAction] = sharedStepAction,
+                    [AzureContextEntry.SharedStepPath] = $"{new string('0', 8 - sharedStepAction.Length) + sharedStepAction}",
+                    [AzureContextEntry.SharedStepIdentifier] = $"{sharedStepAction};{runtime}",
+                    [AzureContextEntry.SharedStepActionPath] = path
+                };
+                range.Add((context, node));
+            }
+            foreach (var node in stepOut.Node.SelectNodes("./*"))
+            {
+                range.Add((new Dictionary<string, object>(), node));
+            }
             nodes.PushRange(range);
 
             // default
             return default;
         }
 
-        private static RhinoTestStep DoGetStep(HtmlNode step)
+        private static RhinoTestStep DoGetStep((Dictionary<string, object> Context, HtmlNode Node) step)
         {
             // setups
-            var onStep = step.SelectNodes(".//parameterizedstring");
+            var onStep = step.Node.SelectNodes(".//parameterizedstring");
 
             // build
             var rhinoStep = new RhinoTestStep
@@ -204,8 +267,19 @@ namespace Rhino.Connectors.Azure.Extensions
                 Action = onStep[0].InnerText,
                 Expected = onStep[1].InnerText
             };
-            rhinoStep.Context["runtime"] = step.GetAttributeValue("id", "-1");
-            rhinoStep.Context["azureStep"] = step;
+
+            // setup
+            var id = step.Node.GetAttributeValue("id", "-1");
+
+            // context
+            rhinoStep.Context[AzureContextEntry.StepRuntime] = id;
+            rhinoStep.Context[AzureContextEntry.Step] = step;
+            rhinoStep.Context[AzureContextEntry.ActionPath] = new string('0', 8 - id.Length) + id;
+
+            foreach (var item in step.Context)
+            {
+                rhinoStep.Context[item.Key] = item.Value;
+            }
 
             // put
             return rhinoStep;

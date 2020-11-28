@@ -4,7 +4,7 @@
 ## In This Article
 * [Connector Capabilities](./docs/basics/ConnectorCapabilities.md 'ConnectorCapabilities')  
 
-> This connector is using Azure REST API in order to integrate with Azure DevOps and TFS. Pleaes note that some functionalities are not yet supported (on new versions) and some are not supported at all (old versions). The official support is for versions 2017 and above, but might work also on other versions within the REST API capabilites on that version.  
+> This connector is using Azure REST API in order to integrate with Azure DevOps and TFS. Pleaes note that some functionalities are not yet supported (on new versions) and some are not supported at all (old versions). The official support is for [Azure DevOps API v6.0](https://docs.microsoft.com/en-us/rest/api/azure/devops/) and above, but might work also on other versions within the REST API capabilites on that version.  
 
 Rhino API connectors for using with [Azure DevOps or Team Foundation Server](https://azure.microsoft.com/en-us/services/devops/) product.
 
@@ -17,3 +17,4 @@ Rhino API connectors for using with [Azure DevOps or Team Foundation Server](htt
 ## See Also
 * [Syntax for the Work Item Query Language (WIQL)](https://docs.microsoft.com/en-us/azure/devops/boards/queries/wiql-syntax?view=azure-devops)
 * [Client Libraries](https://docs.microsoft.com/en-us/azure/devops/integrate/concepts/dotnet-client-libraries?view=azure-devops)
+* [Azure DevOps Services REST API Reference](https://docs.microsoft.com/en-us/rest/api/azure/devops/)
