@@ -54,5 +54,8 @@ namespace Rhino.Connectors.Azure.Contracts
 
         // TODO: add documentation
         public const string SharedStepIdentifier = "azrSharedStepIdentifier";
+
+        // TODO: add documentation
+        public const string Outcome = "azrOutcome";
     }
 }

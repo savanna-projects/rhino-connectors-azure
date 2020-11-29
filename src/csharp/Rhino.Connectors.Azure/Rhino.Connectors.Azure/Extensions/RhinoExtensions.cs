@@ -30,7 +30,7 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class RhinoExtensions
     {
-        #region *** Test Case Results  ***
+        #region *** Test Iteration Results ***
         /// <summary>
         /// Gets a basic <see cref="TestIterationDetailsModel"/> object.
         /// </summary>
@@ -42,8 +42,8 @@ namespace Rhino.Connectors.Azure.Extensions
             var iteration = new TestIterationDetailsModel
             {
                 Id = testCase.Iteration + 1,
-                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: true),
-                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: true),
+                StartedDate = DateTime.Now.AzureNow(addMilliseconds: true),
+                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: true),
                 Comment = "Automatically Created by Rhino Engine."
             };
             iteration.DurationInMs = (iteration.CompletedDate - iteration.StartedDate).TotalMilliseconds;
@@ -105,16 +105,19 @@ namespace Rhino.Connectors.Azure.Extensions
                 ActionPath = testStep.Context.GetCastedValueOrDefault(AzureContextEntry.SharedStepPath, "-1"),
                 IterationId = iteration,
                 SharedStepModel = new SharedStepModel { Id = id, Revision = GetSharedStepRevision(testStep) },
-                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false),
-                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: false)
+                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
+                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false)
             };
 
             // outcome
             if (setOutcome)
             {
                 actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
-                actionResult.CompletedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false);
+                actionResult.CompletedDate = DateTime.Now.AzureNow(addMilliseconds: false);
             }
+            actionResult.ErrorMessage = actionResult.Outcome == nameof(TestOutcome.Failed)
+                ? testStep.ReasonPhrase
+                : string.Empty;
 
             // get
             return actionResult;
@@ -130,15 +133,15 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 ActionPath = actionPath,
                 IterationId = iteration,
-                StartedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false),
-                CompletedDate = DateTime.UtcNow.AddMinutes(5).AzureNow(addMilliseconds: false)
+                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
+                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false)
             };
 
             // outcome
             if (setOutcome)
             {
                 actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
-                actionResult.CompletedDate = DateTime.UtcNow.AzureNow(addMilliseconds: false);
+                actionResult.CompletedDate = DateTime.Now.AzureNow(addMilliseconds: false);
             }
 
             // get
@@ -271,7 +274,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return testCase;
         }
 
-        #region *** JSON Test Document ***
+        #region *** JSON Test Document     ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
         /// </summary>
@@ -308,7 +311,7 @@ namespace Rhino.Connectors.Azure.Extensions
         private static JsonPatchDocument DoAsTestDocument(RhinoTestCase testCase, IDictionary<string, object> customFields)
         {
             // setup
-            int.TryParse(testCase.Priority, out int priorityOut);
+            _ = int.TryParse(testCase.Priority, out int priorityOut);
             var options = testCase
                 .Context
                 .GetCastedValueOrDefault($"{Connector.AzureTestManager}:options", new Dictionary<string, object>());
@@ -352,7 +355,7 @@ namespace Rhino.Connectors.Azure.Extensions
             }
 
             // get
-            return $"<steps id=\"0\" last=\"{steps.Count}\">{string.Join(string.Empty, steps)}</steps>";
+            return $"<steps id=\"0\" last=\"{steps.Count}\">{string.Concat(steps)}</steps>";
         }
 
         private static string GetActionHtml(RhinoTestStep step, int id)
@@ -408,7 +411,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** JSON Bug Document  ***
+        #region *** JSON Bug Document      ***
         public static JsonPatchDocument AsBugDocument(this RhinoTestCase testCase)
         {
             throw new NotImplementedException();

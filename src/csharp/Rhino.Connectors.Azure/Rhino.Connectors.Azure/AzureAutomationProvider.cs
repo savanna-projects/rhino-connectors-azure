@@ -4,6 +4,10 @@
  * RESOURCES
  * https://docs.microsoft.com/en-us/azure/devops/boards/queries/wiql-syntax?view=azure-devops
  * https://oshamrai.wordpress.com/vsts-rest-api-examples/
+ * https://stackoverflow.com/questions/44495814/how-to-add-test-results-to-a-test-run-in-vsts-using-rest-api-programatically
+ * https://developercommunity.visualstudio.com/content/problem/77426/need-a-tutorial-how-to-create-test-run-and-post-te.html
+ * https://developercommunity.visualstudio.com/content/problem/602005/rest-api-to-post-steps-and-steps-result-of-test-ca.html
+ * https://stackoverflow.com/questions/44697226/how-to-add-update-individual-result-to-each-test-step-in-testcase-of-vsts-tfs-pr
  */
 using Gravity.Abstraction.Logging;
 using Gravity.Extensions;
@@ -226,7 +230,6 @@ namespace Rhino.Connectors.Azure
             var suitesByPlans = new ConcurrentBag<(int Plan, IEnumerable<int> Suites)>();
             var testCases = new ConcurrentBag<string>();
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
-            var project = Configuration.ConnectorConfiguration.Project;
 
             // get: suites and plans
             Parallel.ForEach(itemsToFind, options, id =>
@@ -366,7 +369,6 @@ namespace Rhino.Connectors.Azure
         private void AddTestToSuite(int testPlan, int testSuite, string testCase)
         {
             // setup
-            var project = Configuration.ConnectorConfiguration.Project;
             testPlan = testPlan <= 0 ? planManagement.GetPlanForSuite(project, testSuite) : 0;
 
             // put
@@ -487,7 +489,7 @@ namespace Rhino.Connectors.Azure
         }
         #endregion
 
-        #region *** Test Run          ***
+        #region *** Create: Test Run  ***
         /// <summary>
         /// Creates an automation provider test run entity. Use this method to implement the automation
         /// provider test run creation and to modify the loaded Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.
@@ -535,11 +537,11 @@ namespace Rhino.Connectors.Azure
         private TestRun DoCreateTestRun(RhinoTestRun testRun)
         {
             // setup
-            var createModel = GetCreateModel();
+            var runCreateModel = GetCreateModel();
 
             // create
             var onTestRun = testManagement
-                .CreateTestRunAsync(createModel, Configuration.ConnectorConfiguration.Project)
+                .CreateTestRunAsync(runCreateModel, Configuration.ConnectorConfiguration.Project)
                 .GetAwaiter()
                 .GetResult();
 
@@ -604,14 +606,70 @@ namespace Rhino.Connectors.Azure
         /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun results object to complete by.</param>
         public override void OnCompleteTestRun(RhinoTestRun testRun)
         {
+            // setup
+            _ = int.TryParse(testRun.Key, out int runIdOut);
 
+            // get test results
+            var azureTestRun = testManagement.GetTestRunByIdAsync(project, testRun.Key.ToInt()).GetAwaiter().GetResult();
+            var runResults = GetTestRunResults(azureTestRun).Where(i => i.State != nameof(TestRunState.Completed)).ToList();
+
+            // exit condition
+            if (runResults.Count == 0)
+            {
+                return;
+            }
+
+            // iterate
+            var results = new List<TestCaseResult>();
+            for (int i = 0; i < runResults.Count; i++)
+            {
+                var result = CompleteSingleResult(testRun, runResults[i]);
+                if (result != default)
+                {
+                    results.Add(result);
+                }
+            }
+
+            // put
+            testManagement.UpdateTestResultsAsync(results.ToArray(), project, runIdOut).GetAwaiter().GetResult();
+        }
+
+        private static TestCaseResult CompleteSingleResult(RhinoTestRun testRun, TestCaseResult caseResult)
+        {
+            // setup
+            var result = caseResult.Clone();
+            var testCase = testRun.TestCases.FirstOrDefault(i => i.Key == result.TestCase.Id);
+
+            // exit conditions
+            if (testCase == default)
+            {
+                return default;
+            }
+
+            // outcmoe
+            result.Outcome = testRun.TestCases.Any(i => i.Key == result.TestCase.Id && !i.Actual)
+                ? nameof(TestOutcome.Failed)
+                : nameof(TestOutcome.Passed);
+            if (testRun.TestCases.All(i => i.Key == result.TestCase.Id && i.Inconclusive))
+            {
+                result.Outcome = nameof(TestOutcome.Inconclusive);
+            }
+
+            // state & complete date
+            result.State = nameof(TestRunState.Completed);
+            result.CompletedDate = testRun
+                .TestCases
+                .Where(i => i.Key == result.TestCase.Id)
+                .OrderByDescending(i => i.End)
+                .First()
+                .End
+                .AzureNow(true);
+
+            // get
+            return result;
         }
         #endregion
 
-        // https://stackoverflow.com/questions/44495814/how-to-add-test-results-to-a-test-run-in-vsts-using-rest-api-programatically
-        // https://developercommunity.visualstudio.com/content/problem/77426/need-a-tutorial-how-to-create-test-run-and-post-te.html
-        // https://developercommunity.visualstudio.com/content/problem/602005/rest-api-to-post-steps-and-steps-result-of-test-ca.html
-        // https://stackoverflow.com/questions/44697226/how-to-add-update-individual-result-to-each-test-step-in-testcase-of-vsts-tfs-pr
         #region *** Put: Test Run     ***
         /// <summary>
         /// Updates a single test results iteration under automation provider.
@@ -620,41 +678,70 @@ namespace Rhino.Connectors.Azure
         public override void OnUpdateTestResult(RhinoTestCase testCase)
         {
             // setup
-            var project = Configuration.ConnectorConfiguration.Project;
+            var outcome = testCase.Context.GetCastedValueOrDefault(AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
+            var result = GetTestCaseResult(testCase);
+
+            // exit conditions
+            if(result == default)
+            {
+                return;
+            }
+
+            // setup
+            result.Outcome = outcome;
+
+            // create
+            var iteration = testCase.ToTestIterationDetails(setOutcome: true);
+            iteration.StartedDate = testCase.Start.AzureNow(addMilliseconds: true);
+
+            // status
+            if (outcome == nameof(TestOutcome.Passed) || outcome == nameof(TestOutcome.Failed))
+            {
+                iteration.CompletedDate = testCase.End.AzureNow(addMilliseconds: true);
+                if (result.IterationDetails.Count == 1)
+                {
+                    result.State = nameof(TestRunState.Completed);
+                }
+
+                var itemToRemove = result.IterationDetails.Find(i => i.Id == testCase.Iteration + 1);
+                if (itemToRemove != default)
+                {
+                    result.IterationDetails.Remove(itemToRemove);
+                }
+
+                result.IterationDetails.Add(iteration);
+            }
+
+            // update
+            testManagement
+                .UpdateTestResultsAsync(new[] { result }, project, int.Parse(testCase.TestRunKey))
+                .GetAwaiter()
+                .GetResult();
+        }
+
+        private TestCaseResult GetTestCaseResult(RhinoTestCase testCase)
+        {
+            // setup
+            _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
 
             // get test results
-            var result = testManagement.GetTestResultsAsync(project, int.Parse(TestRun.Key))
+            var result = testManagement.GetTestResultsAsync(project, runIdOut)
                 .GetAwaiter()
                 .GetResult()
                 .Find(i => i.TestCase.Id.Equals(testCase.Key));
 
-            // get iterations
-            // var iteration = result?.IterationDetails.Find(i => i.Id.Equals(testCase.Iteration));
-
-            // create
-            if(result.IterationDetails == default)
+            // exit conditions
+            if (result == null)
             {
-                var onResults = result.Clone();
-                onResults.IterationDetails = new List<TestIterationDetailsModel>
-                {
-                    new TestIterationDetailsModel
-                    {
-                        Outcome = nameof(TestOutcome.Failed),
-                        ActionResults = new List<TestActionResultModel>
-                        {
-                            new TestActionResultModel
-                            {
-                                Outcome = nameof(TestOutcome.Passed)
-                            },
-                            new TestActionResultModel
-                            {
-                                Outcome = nameof(TestOutcome.Failed)
-                            }
-                        }
-                    }
-                };
-                var a = testManagement.UpdateTestResultsAsync(new[] { onResults }, project, int.Parse(TestRun.Key)).GetAwaiter().GetResult();
+                logger?.Debug($"Get-TestResults -TestCase {testCase.Key} = NotFound");
+                return default;
             }
+
+            // get iterations results
+            return testManagement
+                .GetTestResultByIdAsync(project, runId: runIdOut, testCaseResultId: result.Id, detailsToInclude: ResultDetails.Iterations)
+                .GetAwaiter()
+                .GetResult();
         }
         #endregion
 
@@ -672,8 +759,17 @@ namespace Rhino.Connectors.Azure
             var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
 
             // iterate
-            Parallel.ForEach(ids, options, id
-                => testManagement.DeleteTestRunAsync(project, id).GetAwaiter().GetResult());
+            Parallel.ForEach(ids, options, id =>
+            {
+                try
+                {
+                    testManagement.DeleteTestRunAsync(project, id).GetAwaiter().GetResult();
+                }
+                catch (Exception e) when (e != null)
+                {
+                    logger?.Debug($"Delete-TestRun -Run {id} = {e.Message}");
+                }
+            });
         }
         #endregion
 

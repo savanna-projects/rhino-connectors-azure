@@ -12,6 +12,7 @@ using Rhino.Api.Contracts.Attributes;
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
 using Rhino.Api.Extensions;
+using Rhino.Connectors.Azure.Contracts;
 
 using System;
 using System.Collections.Generic;
@@ -86,7 +87,7 @@ namespace Rhino.Connectors.Azure
         public override RhinoTestCase OnPreTestExecute(RhinoTestCase testCase)
         {
             // setup
-            testCase.Context["outcome"] = nameof(TestOutcome.InProgress);
+            testCase.Context[AzureContextEntry.Outcome] = nameof(TestOutcome.InProgress);
 
             // update
             ProviderManager.UpdateTestResult(testCase);
@@ -113,7 +114,7 @@ namespace Rhino.Connectors.Azure
             }
 
             // put
-            testCase.Context["outcome"] = outcome;
+            testCase.Context[AzureContextEntry.Outcome] = outcome;
 
             // update
             ProviderManager.UpdateTestResult(testCase);

@@ -23,7 +23,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static int ToInt(this int? number)
         {
             // setup
-            int.TryParse($"{number}", out int numberOut);
+            _ = int.TryParse($"{number}", out int numberOut);
 
             // get
             return numberOut;

@@ -48,8 +48,8 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <summary>
         /// Gets all test suites associated with a work item.
         /// </summary>
-        /// <param name="id"><see cref="WorkItem.Id"/> to find by.</param>
         /// <param name="client">Client to perfrom search with.</param>
+        /// <param name="id"><see cref="WorkItem.Id"/> to find by.</param>
         /// <returns>A collection of TestSuite IDs.</returns>
         public static IEnumerable<int> FindTestSuites(
             this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
@@ -195,10 +195,10 @@ namespace Rhino.Connectors.Azure.Extensions
             nodesQueue.PushRange(nodes.Select(i => (new Dictionary<string, object>(), i)));
 
             // iterate
-            while (nodesQueue.Count > 0)
+            while (!nodesQueue.IsEmpty)
             {
                 var testStep = DoGetStep(client, nodesQueue);
-                if(testStep == default)
+                if (testStep == default)
                 {
                     continue;
                 }
