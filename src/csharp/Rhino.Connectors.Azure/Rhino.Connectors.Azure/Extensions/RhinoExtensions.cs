@@ -30,7 +30,7 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class RhinoExtensions
     {
-        #region *** Test Iteration Results ***
+        #region *** Rhino Test Case: Models   ***
         /// <summary>
         /// Gets a basic <see cref="TestIterationDetailsModel"/> object.
         /// </summary>
@@ -215,42 +215,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        /// <summary>
-        /// Gets <see cref="VssCredentials"/> by RhinoConfiguration.ConnectorConfiguration.
-        /// </summary>
-        /// <param name="configuration">RhinoConfiguration by which to get <see cref="VssCredentials"/>.</param>
-        /// <returns><see cref="VssCredentials"/> object for interacting with Azure DevOps or Team Foundation Server.</returns>
-        public static VssCredentials GetVssCredentials(this RhinoConfiguration configuration)
-        {
-            // setup
-            var isOs = configuration.ConnectorConfiguration.AsOsUser;
-            var userName = configuration.ConnectorConfiguration.UserName;
-            var password = configuration.ConnectorConfiguration.Password;
-
-            // by token
-            if (string.IsNullOrEmpty(password) && !string.IsNullOrEmpty(userName))
-            {
-                return CredentialsFactory.GetVssCredentials(personalAccessToken: userName);
-            }
-
-            // get
-            return isOs
-                ? CredentialsFactory.GetVssCredentials(new NetworkCredential(userName, password))
-                : CredentialsFactory.GetVssCredentials(userName, password);
-        }
-
-        // TODO: add comments
-        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
-        {
-            return DoGetAzureCapability(configuration, capability, defaultValue);
-        }
-
-        // TODO: add comments
-        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
-        {
-            DoAddAzureCapability(configuration, capability, value);
-        }
-
+        #region *** Rhino Test Case: Context  ***
         /// <summary>
         /// Adds an item to RhinoTestCase.Context, replacing existing one if already present.
         /// </summary>
@@ -273,8 +238,9 @@ namespace Rhino.Connectors.Azure.Extensions
             // get
             return testCase;
         }
+        #endregion
 
-        #region *** JSON Test Document     ***
+        #region *** Rhino Test Case: Document ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
         /// </summary>
@@ -411,13 +377,65 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** JSON Bug Document      ***
+        #region *** Rhino Configuration       ***
+        /// <summary>
+        /// Gets <see cref="VssCredentials"/> by RhinoConfiguration.ConnectorConfiguration.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration by which to get <see cref="VssCredentials"/>.</param>
+        /// <returns><see cref="VssCredentials"/> object for interacting with Azure DevOps or Team Foundation Server.</returns>
+        public static VssCredentials GetVssCredentials(this RhinoConfiguration configuration)
+        {
+            // setup
+            var isOs = configuration.ConnectorConfiguration.AsOsUser;
+            var userName = configuration.ConnectorConfiguration.UserName;
+            var password = configuration.ConnectorConfiguration.Password;
+
+            // by token
+            if (string.IsNullOrEmpty(password) && !string.IsNullOrEmpty(userName))
+            {
+                return CredentialsFactory.GetVssCredentials(personalAccessToken: userName);
+            }
+
+            // get
+            return isOs
+                ? CredentialsFactory.GetVssCredentials(new NetworkCredential(userName, password))
+                : CredentialsFactory.GetVssCredentials(userName, password);
+        }
+
+        /// <summary>
+        /// Gets a value from connector_azure:options dictionary under RhinoConfiguration.Capabilites.
+        /// </summary>
+        /// <typeparam name="T">The type of value to return.</typeparam>
+        /// <param name="configuration">RhinoConfiguration to get value from.</param>
+        /// <param name="capability">Capability name to get value from.</param>
+        /// <param name="defaultValue">The default value to return if the capability was not found.</param>
+        /// <returns>The value from the capability or default if not found.</returns>
+        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
+        {
+            return DoGetAzureCapability(configuration, capability, defaultValue);
+        }
+
+        /// <summary>
+        /// Adds a value to connector_azure:options dictionary under RhinoConfiguration.Capabilites.
+        /// If the capability exists it will be overwritten.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration to add value to.</param>
+        /// <param name="capability">Capability name to add value to.</param>
+        /// <param name="value">The value to add.</param>
+        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
+        {
+            DoAddAzureCapability(configuration, capability, value);
+        }
+        #endregion
+
+        #region *** JSON Bug Document         ***
         public static JsonPatchDocument AsBugDocument(this RhinoTestCase testCase)
         {
             throw new NotImplementedException();
         }
         #endregion
 
+        #region *** Utilities ***
         private static T DoGetAzureCapability<T>(RhinoConfiguration configuration, string capability, T defaultValue)
         {
             // setup
@@ -463,5 +481,6 @@ namespace Rhino.Connectors.Azure.Extensions
             // get
             return item.Rev == null || item.Rev == 0 ? 1 : item.Rev.ToInt();
         }
+        #endregion
     }
 }

@@ -10,6 +10,7 @@ using HtmlAgilityPack;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
+using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Connectors.Azure.Contracts;
@@ -22,6 +23,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
+using WorkItem = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models.WorkItem;
+
 namespace Rhino.Connectors.Azure.Extensions
 {
     /// <summary>
@@ -30,8 +33,9 @@ namespace Rhino.Connectors.Azure.Extensions
     internal static class AzureExtensions
     {
         // constants
-        private const Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes TestEntryType = Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.SuiteEntryTypes.TestCase;
+        private const SuiteEntryTypes TestEntryType = SuiteEntryTypes.TestCase;
 
+        #region *** Work Item Object      ***
         /// <summary>
         /// Gets a field from the WorkItem.Fields collection or default value if failed.
         /// </summary>
@@ -42,31 +46,29 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>Value.</returns>
         public static T GetField<T>(this WorkItem item, string field, T defaultValue)
         {
-            return DoGetField(item, field, defaultValue);
+            return item.Fields.GetCastedValueOrDefault(key: field, @default: defaultValue);
         }
+        #endregion
 
+        #region *** Test Plan Http Client ***
         /// <summary>
-        /// Gets all test suites associated with a work item.
+        /// Gets all test suites associated with a <see cref="WorkItem"/>.
         /// </summary>
-        /// <param name="client">Client to perfrom search with.</param>
-        /// <param name="id"><see cref="WorkItem.Id"/> to find by.</param>
-        /// <returns>A collection of TestSuite IDs.</returns>
-        public static IEnumerable<int> FindTestSuites(
-            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
-            int id)
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="id"><see cref="WorkItem.Id"/> for which to find test suites.</param>
+        /// <returns>A collection of <see cref="TestSuite.Id"/>.</returns>
+        public static IEnumerable<int> FindTestSuites(this TestPlanHttpClient client, int id)
         {
             return DoFindTestSuites(client, id);
         }
 
         /// <summary>
-        /// Add test cases to suite.
+        /// Gets <see cref="TestPlan.Id"/> for the provided <see cref="TestSuite.Id"/>.
         /// </summary>
-        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> client by which to find test suites.</param>
-        /// <param name="suiteId">ID of the test suite to find..</param>
-        public static int GetPlanForSuite(
-            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
-            string project,
-            int suiteId)
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="suiteId"><see cref="TestSuite.Id"/> by which to get <see cref="TestPlan.Id"/>.</param>
+        /// <returns><see cref="TestPlan.Id"/> or 0 if not found.</returns>
+        public static int GetPlanForSuite(this TestPlanHttpClient client, string project, int suiteId)
         {
             try
             {
@@ -85,14 +87,12 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
-        /// Add test cases to suite.
+        /// Gets the first parent <see cref="TestPlan.Id"/> for the provided <see cref="TestCase"/>.
         /// </summary>
-        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> client by which to find test suites.</param>
-        /// <param name="suiteId">ID of the test suite to find..</param>
-        public static int GetPlanForTest(
-            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
-            string project,
-            int testId)
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="testId"><see cref="TestCase"/> by which to find <see cref="TestPlan.Id"/>.</param>
+        /// <returns><see cref="TestPlan.Id"/> or 0 if not found.</returns>
+        public static int GetPlanForTest(this TestPlanHttpClient client, string project, int testId)
         {
             try
             {
@@ -116,10 +116,11 @@ namespace Rhino.Connectors.Azure.Extensions
                 return 0;
             }
         }
+        #endregion
 
-        #region *** Get Test Case ***
+        #region *** Work Item Http Client ***
         /// <summary>
-        /// Gets a RhinoTestCase based on <see cref="WorkItem"/> object.
+        /// Gets a RhinoTestCase based on <see cref="WorkItem.Id"/>.
         /// </summary>
         /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> to fetch data by.</param>
         /// <param name="id">The <see cref="WorkItem.Id"/> to create by.</param>
@@ -130,11 +131,11 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
-        /// Gets a collection of RhinoTestCase based on <see cref="WorkItem"/> objects.
+        /// Gets a collection of RhinoTestCase based on a collection of <see cref="WorkItem.Id"/>.
         /// </summary>
         /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> to fetch data by.</param>
         /// <param name="ids">A collection of <see cref="WorkItem.Id"/> to create by.</param>
-        /// <returns>A collection RhinoTestCase object.</returns>
+        /// <returns>A collection RhinoTestCase objects.</returns>
         public static IEnumerable<RhinoTestCase> GetRhinoTestCases(this WorkItemTrackingHttpClient client, IEnumerable<int> ids)
         {
             return DoGetRhinoTestCases(client, ids);
@@ -159,7 +160,7 @@ namespace Rhino.Connectors.Azure.Extensions
             foreach (var item in items)
             {
                 // exit conditions
-                var stepsHtml = DoGetField(item, "Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml();
+                var stepsHtml = item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml();
                 var stepsDocument = new HtmlDocument();
 
                 // load
@@ -170,8 +171,8 @@ namespace Rhino.Connectors.Azure.Extensions
                 {
                     Key = $"{item.Id}"
                 };
-                testCase.Scenario = DoGetField(item, "System.Title", string.Empty);
-                testCase.Priority = $"{DoGetField<long>(item, "Microsoft.VSTS.Common.Priority", 2)}";
+                testCase.Scenario = item.Fields.GetCastedValueOrDefault("System.Title", string.Empty);
+                testCase.Priority = $"{item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.Common.Priority", 2L)}";
                 testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
                 testCase.TotalSteps = testCase.Steps.Count();
                 testCase.DataSource = DoGetDataSource(item);
@@ -209,7 +210,9 @@ namespace Rhino.Connectors.Azure.Extensions
             return testSteps;
         }
 
-        private static RhinoTestStep DoGetStep(WorkItemTrackingHttpClient client, ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)> nodes)
+        private static RhinoTestStep DoGetStep(
+            WorkItemTrackingHttpClient client,
+            ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)> nodes)
         {
             // setup > dequeue next
             nodes.TryPop(out (Dictionary<string, object> Context, HtmlNode Node) stepOut);
@@ -317,31 +320,9 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Utilities     ***
-        // gets a filed from work item
-        private static T DoGetField<T>(WorkItem item, string field, T defaultValue)
-        {
-            // exit conditions
-            if (!item.Fields.ContainsKey(field))
-            {
-                return defaultValue;
-            }
-
-            // get
-            try
-            {
-                return (T)item.Fields[field];
-            }
-            catch (Exception e) when (e != null)
-            {
-                return defaultValue;
-            }
-        }
-
+        #region *** Utilities             ***
         // gets test suites collection from work item
-        private static IEnumerable<int> DoFindTestSuites(
-            this Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestPlanHttpClient client,
-            int id)
+        private static IEnumerable<int> DoFindTestSuites(this TestPlanHttpClient client, int id)
         {
             try
             {

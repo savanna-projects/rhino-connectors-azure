@@ -7,55 +7,89 @@ namespace Rhino.Connectors.Azure.Contracts
 {
     internal static class AzureContextEntry
     {
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Project.
+        /// </summary>
         public const string Project = "azrProject";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Configuration.
+        /// </summary>
         public const string TestConfiguration = "azrTestConfiguration";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Configuration ID.
+        /// </summary>
         public const string ConfigurationId = "azrTestConfigurationId";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Run.
+        /// </summary>
         public const string TestRun = "azrTestRun";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Work Item entity.
+        /// </summary>
         public const string WorkItem = "azrWorkItem";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold test action (step) id. This the ID given to the action by TCM.
+        /// </summary>
         public const string StepRuntime = "runtimeid";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold test action (step).
+        /// </summary>
         public const string Step = "azrStep";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Iteration Details.
+        /// </summary>
         public const string IterationDetails = "azrIterationDetails";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Action Path. This is the path given to the action by TCM.
+        /// </summary>
         public const string ActionPath = "azrActionPath";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Shared Step entity.
+        /// </summary>
         public const string SharedStep = "azrSharedStep";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Shared Step ID.
+        /// </summary>
         public const string SharedStepId = "azrSharedStepId";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Shared Step Action Path. This is the path given to the action by TCM.
+        /// </summary>
         public const string SharedStepActionPath = "azrSharedStepActionPath";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Test Action Path of a shared step. This is the path given to the action by TCM.
+        /// </summary>
         public const string SharedStepPath = "azrSharedStepPath";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Shared Step action.
+        /// </summary>
         public const string SharedStepAction = "azrSharedStepAction";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold test action (step) id. This the ID given to the action by TCM.
+        /// </summary>
         public const string SharedStepRuntime = "azrSharedStepRuntimeid";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold Azure Shared Step Identifier.
+        /// </summary>
         public const string SharedStepIdentifier = "azrSharedStepIdentifier";
 
-        // TODO: add documentation
+        /// <summary>
+        /// Context entry to hold outcome of a Test Case, Test Run, Test Step, etc.
+        /// </summary>
         public const string Outcome = "azrOutcome";
     }
 }

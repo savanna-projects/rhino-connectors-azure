@@ -6,7 +6,7 @@
 
     <!-- Settings: Project and Build -->
     <Parameter name="Build.Number" value="Development" />
-    <Parameter name="Project.Name" value="Rhino Connectors: Gurock" />
+    <Parameter name="Project.Name" value="Rhino Connectors: Azure" />
 
     <!-- Settings: Data -->
     <Parameter name="Data.ConnectionString" value="Data Source=.\\SQLEXPRESS;Initial Catalog=[catalog];Integrated Security=True" />

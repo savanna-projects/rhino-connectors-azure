@@ -3,8 +3,6 @@
  * 
  * RESOURCES
  */
-using Rhino.Api.Contracts.Interfaces;
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

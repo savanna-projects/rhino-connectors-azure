@@ -76,9 +76,29 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>ISO 8601 formattef.</returns>
         public static DateTime AzureNow(this DateTime dateTime, bool addMilliseconds)
         {
-            return addMilliseconds
-                ? new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour, dateTime.Minute, dateTime.Second, dateTime.Millisecond, dateTime.Kind)
-                : new DateTime(dateTime.Year, dateTime.Month, dateTime.Day, dateTime.Hour, dateTime.Minute, dateTime.Second, dateTime.Kind);
+            // with milliseconds
+            if (addMilliseconds)
+            {
+                return new DateTime(
+                    year: dateTime.Year,
+                    month: dateTime.Month,
+                    day: dateTime.Day,
+                    hour: dateTime.Hour,
+                    minute: dateTime.Minute,
+                    second: dateTime.Second,
+                    millisecond: dateTime.Millisecond,
+                    kind: dateTime.Kind);
+            }
+
+            // without milliseconds
+            return new DateTime(
+                year: dateTime.Year,
+                month: dateTime.Month,
+                day: dateTime.Day,
+                hour: dateTime.Hour,
+                minute: dateTime.Minute,
+                second: dateTime.Second,
+                kind: dateTime.Kind);
         }
     }
 }

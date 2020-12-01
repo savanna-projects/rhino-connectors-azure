@@ -3,7 +3,6 @@
  * 
  * RESOURCES
  */
-using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
