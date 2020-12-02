@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
+using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Framework;
 
@@ -374,6 +375,98 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // add
             data[field] = value;
+        }
+        #endregion
+
+        #region *** Rhino Test Step: images   ***
+        /// <summary>
+        /// Get a collection of Attachment objects, ready to be uploaded.
+        /// </summary>
+        /// <param name="testStep">RhinoTestStep to build by.</param>
+        /// <returns>A collection of <see cref="AttachmentReference"/> after uploaded.</returns>
+        public static IEnumerable<TestAttachmentRequestModel> CreateAttachments(this RhinoTestStep testStep)
+        {
+            return DoCreateAttachments(testStep);
+        }
+
+        private static IEnumerable<TestAttachmentRequestModel> DoCreateAttachments(RhinoTestStep testStep)
+        {
+            // setup
+            var images = testStep.GetScreenshots();
+
+            // build
+            var models = new List<TestAttachmentRequestModel>();
+            foreach (var attachment in images.Select(i => CreateAttachments(i, testStep.Context)))
+            {
+                byte[] bytes;
+                using (var memoryStream = new MemoryStream())
+                {
+                    attachment.UploadStream.CopyTo(memoryStream);
+                    bytes = memoryStream.ToArray();
+                }
+                string base64 = Convert.ToBase64String(bytes);
+
+                models.Add(new TestAttachmentRequestModel
+                {
+                    AttachmentType = attachment.Type,
+                    Comment = "Automatically created by Rhino Engine",
+                    FileName = attachment.Name,
+                    Stream = base64
+                });
+            }
+
+            // context
+            testStep.Context[AzureContextEntry.StepAttachments] = models;
+
+            // get
+            return models;
+        }
+
+        private static Attachment CreateAttachments(string image, IDictionary<string, object> context)
+        {
+            // setup
+            var name = Path.GetFileName(image);
+            var stepRuntime = context.GetCastedValueOrDefault(AzureContextEntry.StepRuntime, string.Empty);
+            var sharedRuntime = context.GetCastedValueOrDefault(AzureContextEntry.SharedStepRuntime, string.Empty);
+            var runtime = string.IsNullOrEmpty(stepRuntime) ? sharedRuntime : stepRuntime;
+            var item = context.GetCastedValueOrDefault(AzureContextEntry.WorkItem, new WorkItem() { Fields = new Dictionary<string, object>() });
+            var project = item.Fields.GetCastedValueOrDefault("System.TeamProject", string.Empty);
+            var areaPath = item.Fields.GetCastedValueOrDefault("System.AreaPath", string.Empty);
+
+            // build
+            return new Attachment
+            {
+                ActionPath = string.Empty,
+                ActionRuntime = runtime,
+                Type = nameof(AttachmentType.GeneralAttachment),
+                FullName = image,
+                Name = name,
+                UploadStream = new FileStream(image, FileMode.Open, FileAccess.Read),
+                Project = string.IsNullOrEmpty(project) ? null : project,
+                AreaPath = string.IsNullOrEmpty(areaPath) ? null : areaPath,
+                IterationId = context.GetCastedValueOrDefault(AzureContextEntry.IterationDetails, 0)
+            };
+        }
+
+        /// <summary>
+        /// Gets a collection of <see cref="TestAttachmentRequestModel"/> for RhinoTestStep.
+        /// </summary>
+        /// <param name="testStep">RhinoTestStep from which to get a collection of <see cref="TestAttachmentRequestModel"/></param>
+        /// <returns>A collection of <see cref="TestAttachmentRequestModel"/></returns>
+        public static IEnumerable<TestAttachmentRequestModel> GetAttachmentModels(this RhinoTestStep testStep)
+        {
+            // setup conditions
+            var isKey = testStep.Context.ContainsKey(AzureContextEntry.StepAttachments);
+            var isType = isKey && testStep.Context[AzureContextEntry.StepAttachments] is IEnumerable<TestAttachmentRequestModel>;
+
+            // exit conditions
+            if (!isType)
+            {
+                return Array.Empty<TestAttachmentRequestModel>();
+            }
+
+            // setup
+            return testStep.Context[AzureContextEntry.StepAttachments] as IEnumerable<TestAttachmentRequestModel>;
         }
         #endregion
 

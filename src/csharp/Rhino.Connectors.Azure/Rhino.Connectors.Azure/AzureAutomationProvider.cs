@@ -21,6 +21,7 @@ using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 using Rhino.Api;
 using Rhino.Api.Contracts.AutomationProvider;
@@ -36,7 +37,9 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -60,6 +63,8 @@ namespace Rhino.Connectors.Azure
         private readonly WorkItemTrackingHttpClient itemManagement;
         private readonly TestManagementHttpClient testManagement;
         private readonly TestPlanHttpClient planManagement;
+        private readonly VssConnection connection;
+        private readonly TeamProjectReference projectReference;
 
         // members
         private readonly ILogger logger;
@@ -95,17 +100,18 @@ namespace Rhino.Connectors.Azure
             // setup
             this.logger = logger;
             var credentials = configuration.GetVssCredentials();
-            var connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
+            connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
             project = configuration.ConnectorConfiguration.Project;
 
             // cache project
             var projectManagement = connection.GetClient<ProjectHttpClient>();
-            TestRun.Context[AzureContextEntry.Project] = projectManagement.GetProjects(ProjectState.All)
+            projectReference = projectManagement.GetProjects(ProjectState.All)
                 .GetAwaiter()
                 .GetResult()
                 .FirstOrDefault(i => i.Name.Equals(Configuration.ConnectorConfiguration.Project, StringComparison.OrdinalIgnoreCase));
+            TestRun.Context[AzureContextEntry.Project] = projectReference;
 
             // create clients
             itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
@@ -682,7 +688,7 @@ namespace Rhino.Connectors.Azure
                 return default;
             }
 
-            // outcmoe
+            // outcome
             result.Outcome = testRun.TestCases.Any(i => i.Key == result.TestCase.Id && !i.Actual)
                 ? nameof(TestOutcome.Failed)
                 : nameof(TestOutcome.Passed);
@@ -773,11 +779,90 @@ namespace Rhino.Connectors.Azure
                 return default;
             }
 
+            // context
+            testCase.Context[AzureContextEntry.TestResultId] = result;
+
             // get iterations results
             return testManagement
                 .GetTestResultByIdAsync(project, runId: runIdOut, testCaseResultId: result.Id, detailsToInclude: ResultDetails.Iterations)
                 .GetAwaiter()
                 .GetResult();
+        }
+
+        /// <summary>
+        /// Adds an attachment into a single test results iteration under automation provider.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update results.</param>
+        public override void OnAddAttachement(RhinoTestCase testCase)
+        {
+            // exit conditions
+            var outcome = testCase.Context.GetCastedValueOrDefault(AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
+            var incluededOutcomes = new[]
+            {
+                nameof(TestOutcome.Passed),
+                nameof(TestOutcome.Failed),
+                nameof(TestOutcome.Inconclusive),
+                nameof(TestOutcome.Warning)
+            };
+            if (!incluededOutcomes.Contains(outcome))
+            {
+                return;
+            }
+
+            // setup
+            _ = int.TryParse(TestRun.Key, out int runId);
+            var testCaseResult = DoGetTestCaseResult(testCase);
+            testCaseResult = testManagement
+                .GetTestResultByIdAsync(project, runId, testCaseResult.Id, ResultDetails.Iterations)
+                .GetAwaiter()
+                .GetResult();
+
+            // setup
+            var attachments = testCase.Steps.SelectMany(i => i.CreateAttachments()).ToList();
+
+            // post
+            UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
+        }
+
+        private void UploadAttachments(IEnumerable<TestAttachmentRequestModel> attachments, int runId, int resultId, int iteration)
+        {
+            // setup
+            var route = $"{projectReference.Id}/_apis/test/Runs/{runId}/Results/{resultId}/Attachments" +
+                $"?iterationId={iteration}" +
+                "&api-version=5.0-preview.1";
+            var jsonSettings = new JsonSerializerSettings
+            {
+                ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
+
+            // upload
+            Parallel.ForEach(attachments, options, attachment =>
+            {
+                try
+                {
+                    var content = JsonConvert.SerializeObject(attachment, jsonSettings);
+                    var stringContent = new StringContent(content, Encoding.UTF8, "application/json");
+                    var response = testManagement.HttpClient.PostAsync(route, stringContent).GetAwaiter().GetResult();
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        logger?.Warn("Add-Attachment" +
+                            $"-File {attachment.FileName}" +
+                            $"-Run {runId}" +
+                            $"-Result {resultId}" +
+                            $"-Iteration {iteration} = {response.StatusCode} - {response.ReasonPhrase}");
+                    }
+                }
+                catch (Exception e) when (e != null)
+                {
+                    logger?.Error("Add-Attachment" +
+                        $"-File {attachment.FileName}" +
+                        $"-Run {runId}" +
+                        $"-Result {resultId}" +
+                        $"-Iteration {iteration} = {e.Message}");
+                }
+            });
         }
         #endregion
 
@@ -841,6 +926,18 @@ namespace Rhino.Connectors.Azure
 
             // get
             return iterations.Clone();
+        }
+
+        private TestCaseResult DoGetTestCaseResult(RhinoTestCase testCase)
+        {
+            // setup
+            _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
+
+            // get test results
+            return testManagement.GetTestResultsAsync(project, runIdOut)
+                .GetAwaiter()
+                .GetResult()
+                .Find(i => i.TestCase.Id.Equals(testCase.Key));
         }
     }
 }

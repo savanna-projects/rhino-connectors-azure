@@ -13,7 +13,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{2DA549C5
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
 	ProjectSection(SolutionItems) = preProject
-		..\..\..\docs\basics\AzureConfiguration.md = ..\..\..\docs\basics\AzureConfiguration.md
 		..\..\..\docs\basics\ConnectorCapabilities.md = ..\..\..\docs\basics\ConnectorCapabilities.md
 		..\..\..\README.md = ..\..\..\README.md
 	EndProjectSection

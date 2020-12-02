@@ -118,7 +118,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Work Item Http Client ***
+        #region *** Work Item HTTP Client ***
         /// <summary>
         /// Gets a RhinoTestCase based on <see cref="WorkItem.Id"/>.
         /// </summary>
@@ -177,6 +177,12 @@ namespace Rhino.Connectors.Azure.Extensions
                 testCase.TotalSteps = testCase.Steps.Count();
                 testCase.DataSource = DoGetDataSource(item);
                 testCase.Context[AzureContextEntry.WorkItem] = item;
+
+                foreach (var testStep in testCase.Steps)
+                {
+                    testStep.Context[AzureContextEntry.WorkItem] = item;
+                    testStep.Context[AzureContextEntry.IterationDetails] = testCase.Iteration + 1;
+                }
 
                 // put
                 testCases.Add(testCase);
