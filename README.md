@@ -1,4 +1,4 @@
-# Gurock Connector - Overview
+# Azure Connector - Overview
 11/13/2020 - 5 minutes to read
 
 ## In This Article
