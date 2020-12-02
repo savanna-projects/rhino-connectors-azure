@@ -1,6 +1,6 @@
 # https://docs.microsoft.com/en-us/azure/devops/pipelines/build/variables?view=azure-devops&tabs=yaml
 
-name: Rhino.Connectors.Gurock.$(Year:yyyy).$(Month).$(DayOfMonth)$(Rev:.r)
+name: Rhino.Connectors.Azure.$(Year:yyyy).$(Month).$(DayOfMonth)$(Rev:.r)
 
 trigger:
   branches:
