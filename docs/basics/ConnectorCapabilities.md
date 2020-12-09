@@ -6,7 +6,7 @@
 ## In This Article
 * [Automation Provider Capabilities](#automation-provider-capabilities)  
 
-Each connector implements it's own integration capabilities and the behavior depends on the implementation. Please follow this post in order to perform a successful integration with TestRail.
+Each connector implements it's own integration capabilities and the behavior depends on the implementation. Please follow this post in order to perform a successful integration with Azure.
 
 ## Automation Provider Capabilities
 The list of optional capabilities which you can pass with Rhino Configuration.  

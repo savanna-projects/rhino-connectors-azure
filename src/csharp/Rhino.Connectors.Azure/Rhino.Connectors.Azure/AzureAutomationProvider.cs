@@ -571,7 +571,7 @@ namespace Rhino.Connectors.Azure
         private RunCreateModel GetCreateModel()
         {
             // setup
-            var plan = Configuration.GetAzureCapability(AzureCapability.TestPlan, -1);
+            var plan = Configuration.GetAzureCapability(AzureCapability.TestPlan, -1L);
             _ = int.TryParse(TestRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
 
             try

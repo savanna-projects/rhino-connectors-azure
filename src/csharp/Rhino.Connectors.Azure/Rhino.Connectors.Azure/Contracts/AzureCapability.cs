@@ -18,7 +18,7 @@ namespace Rhino.Connectors.Azure.Contracts
         public const string IterationPath = "iterationPath";
 
         /// <summary>
-        /// Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.). The fileds names must be system fields names.
+        /// Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.). The fields names must be system fields names.
         /// </summary>
         public const string CustomFields = "customFields";
 
