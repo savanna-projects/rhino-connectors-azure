@@ -69,6 +69,7 @@ namespace Rhino.Connectors.Azure
         // members
         private readonly ILogger logger;
         private readonly string project;
+        private readonly ParallelOptions options;
 
         #region *** Constructors      ***
         /// <summary>
@@ -104,6 +105,7 @@ namespace Rhino.Connectors.Azure
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
             project = configuration.ConnectorConfiguration.Project;
+            options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
 
             // cache project
             var projectManagement = connection.GetClient<ProjectHttpClient>();
@@ -199,7 +201,6 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var itemsToFind = ids.ToNumbers();
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testCases = new ConcurrentBag<int>();
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
 
@@ -235,7 +236,6 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var itemsToFind = ids.ToNumbers();
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var suitesByPlans = new ConcurrentBag<(int Plan, IEnumerable<int> Suites)>();
             var testCases = new ConcurrentBag<string>();
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
@@ -290,7 +290,6 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<RhinoTestCase> ByQueries(IEnumerable<string> queries)
         {
             // setup
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testCases = new ConcurrentBag<int>();
 
             // get: suites and plans
@@ -578,6 +577,7 @@ namespace Rhino.Connectors.Azure
             {
                 // setup
                 plan = plan == -1 ? planManagement.GetPlanForTest(project, testCaseId) : plan;
+                Configuration.AddAzureCapability(AzureCapability.TestPlan, plan);
                 logger?.Debug($"Get-PlanForTest -Project {project} -TestCase {testCaseId} = {plan}");
 
                 //  test points
@@ -601,10 +601,9 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var testCasesGroups = TestRun.TestCases.Split(100);
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
             var testPoints = new ConcurrentBag<TestPoint>();
 
-            // get
+            // build
             Parallel.ForEach(testCasesGroups, options, testCases =>
             {
                 var ids = testCases.Select(i => i.Key).Distinct().AsNumbers().ToList();
@@ -612,6 +611,8 @@ namespace Rhino.Connectors.Azure
                 var query = new TestPointsQuery() { PointsFilter = filter };
 
                 var range = testManagement.GetPointsByQueryAsync(query, project).GetAwaiter().GetResult().Points;
+                range = ValidatePoints(range).ToList();
+
                 testPoints.AddRange(range);
             });
 
@@ -620,20 +621,50 @@ namespace Rhino.Connectors.Azure
             return testPoints;
         }
 
+        private IEnumerable<TestPoint> ValidatePoints(IEnumerable<TestPoint> testPoints)
+        {
+            // setup
+            var testPlan = GetPlan();
+            var testPointsResults = new ConcurrentBag<TestPoint>();
+
+            // build
+            Parallel.ForEach(testPoints, options, testPoint =>
+            {
+                var onTestSuite = Regex.Match(testPoint.Url, pattern: @"(?<=Suites/)\d+").Value;
+                _ = int.TryParse(onTestSuite, out int testSuite);
+
+                try
+                {
+                    var point = testManagement
+                         .GetPointAsync(project, testPlan, testSuite, testPoint.Id)
+                         .GetAwaiter()
+                         .GetResult();
+                    testPointsResults.Add(point);
+                }
+                catch (Exception e) when (e != null)
+                {
+                    logger?.Debug($"Confirm-TestPoint -Id {testPoint.Id} = {e.Message}");
+                }
+            });
+
+            // get
+            return testPointsResults;
+        }
+
         private int GetPlan()
         {
             // setup
             var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = Configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+            var azureOptions = Configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
 
             // exit conditions
-            if (!options.ContainsKey(AzureCapability.TestPlan))
+            if (!azureOptions.ContainsKey(AzureCapability.TestPlan))
             {
                 return -1;
             }
 
             // get
-            var isPlan = int.TryParse($"{options[AzureCapability.TestPlan]}", out int planOut);
+            var isPlan = int.TryParse($"{azureOptions[AzureCapability.TestPlan]}", out int planOut);
             return isPlan ? planOut : -1;
         }
         #endregion
@@ -851,7 +882,6 @@ namespace Rhino.Connectors.Azure
             {
                 ContractResolver = new CamelCasePropertyNamesContractResolver()
             };
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
 
             // upload
             Parallel.ForEach(attachments, options, attachment =>
@@ -894,7 +924,6 @@ namespace Rhino.Connectors.Azure
             var ids = testRuns.Any(i => Regex.IsMatch(i, "(?i)all"))
                 ? testManagement.GetTestRunsAsync(project).GetAwaiter().GetResult().Select(i => i.Id)
                 : testRuns.AsNumbers();
-            var options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
 
             // iterate
             Parallel.ForEach(ids, options, id =>
