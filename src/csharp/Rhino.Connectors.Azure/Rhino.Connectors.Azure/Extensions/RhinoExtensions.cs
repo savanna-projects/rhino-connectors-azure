@@ -23,6 +23,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -245,7 +246,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
         /// </summary>
-        /// <param name="testCase">RhinoTestCase to craeted <see cref="JsonPatchDocument"/> by.</param>
+        /// <param name="testCase">RhinoTestCase to created <see cref="JsonPatchDocument"/> by.</param>
         /// <returns><see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument AsTestDocument(this RhinoTestCase testCase)
         {
@@ -261,7 +262,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
         /// </summary>
-        /// <param name="testCase">RhinoTestCase to craeted <see cref="JsonPatchDocument"/> by.</param>
+        /// <param name="testCase">RhinoTestCase to created <see cref="JsonPatchDocument"/> by.</param>
         /// <param name="customFields">A collection of custom fields to apply.</param>
         /// <returns><see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument AsTestDocument(this RhinoTestCase testCase, IDictionary<string, object> customFields)
@@ -333,10 +334,11 @@ namespace Rhino.Connectors.Azure.Extensions
             var expectedHtml = string.IsNullOrEmpty(step.Expected)
                 ? "&lt;DIV&gt;&lt;P&gt;&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;"
                 : "&lt;P&gt;[expected]&lt;/P&gt;";
+            var action = Regex.Replace(input: step.Action, pattern: @"^\d+\.\s+", replacement: string.Empty);
 
             return
                 $"<step id=\"{id}\" type=\"{type}\">" +
-                $"<parameterizedString isformatted=\"true\">&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;{step.Action}&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</parameterizedString>" +
+                $"<parameterizedString isformatted=\"true\">&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;{action}&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</parameterizedString>" +
                 $"<parameterizedString isformatted=\"true\">{expectedHtml.Replace("[expected]", expectedResults)}</parameterizedString>" +
                 "<description/>" +
                 "</step>";
