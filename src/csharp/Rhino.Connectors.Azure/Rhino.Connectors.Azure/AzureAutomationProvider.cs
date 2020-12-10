@@ -571,7 +571,7 @@ namespace Rhino.Connectors.Azure
         private RunCreateModel GetCreateModel()
         {
             // setup
-            var plan = Configuration.GetAzureCapability(AzureCapability.TestPlan, -1L);
+            var plan = GetPlan();
             _ = int.TryParse(TestRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
 
             try
@@ -618,6 +618,23 @@ namespace Rhino.Connectors.Azure
             // get
             logger?.Debug($"Get-AllTestPoints = {testPoints.Count}");
             return testPoints;
+        }
+
+        private int GetPlan()
+        {
+            // setup
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = Configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+
+            // exit conditions
+            if (!options.ContainsKey(AzureCapability.TestPlan))
+            {
+                return -1;
+            }
+
+            // get
+            var isPlan = int.TryParse($"{options[AzureCapability.TestPlan]}", out int planOut);
+            return isPlan ? planOut : -1;
         }
         #endregion
 
