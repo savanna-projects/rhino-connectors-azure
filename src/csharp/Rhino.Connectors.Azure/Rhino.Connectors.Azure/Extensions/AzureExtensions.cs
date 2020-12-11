@@ -50,11 +50,11 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Test Plan Http Client ***
+        #region *** Test Plan HTTP Client ***
         /// <summary>
         /// Gets all test suites associated with a <see cref="WorkItem"/>.
         /// </summary>
-        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for performing search.</param>
         /// <param name="id"><see cref="WorkItem.Id"/> for which to find test suites.</param>
         /// <returns>A collection of <see cref="TestSuite.Id"/>.</returns>
         public static IEnumerable<int> FindTestSuites(this TestPlanHttpClient client, int id)
@@ -65,7 +65,8 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <summary>
         /// Gets <see cref="TestPlan.Id"/> for the provided <see cref="TestSuite.Id"/>.
         /// </summary>
-        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for performing search.</param>
+        /// <param name="project">Team project from which to get <see cref="TestPlan.Id"/>.</param>
         /// <param name="suiteId"><see cref="TestSuite.Id"/> by which to get <see cref="TestPlan.Id"/>.</param>
         /// <returns><see cref="TestPlan.Id"/> or 0 if not found.</returns>
         public static int GetPlanForSuite(this TestPlanHttpClient client, string project, int suiteId)
@@ -89,7 +90,8 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <summary>
         /// Gets the first parent <see cref="TestPlan.Id"/> for the provided <see cref="TestCase"/>.
         /// </summary>
-        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for perfroming search.</param>
+        /// <param name="client"><see cref="TestPlanHttpClient"/> to use for performing search.</param>
+        /// <param name="project">Team project from which to get <see cref="TestPlan.Id"/>.</param>
         /// <param name="testId"><see cref="TestCase"/> by which to find <see cref="TestPlan.Id"/>.</param>
         /// <returns><see cref="TestPlan.Id"/> or 0 if not found.</returns>
         public static int GetPlanForTest(this TestPlanHttpClient client, string project, int testId)
