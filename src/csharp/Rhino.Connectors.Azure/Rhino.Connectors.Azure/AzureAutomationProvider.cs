@@ -277,7 +277,7 @@ namespace Rhino.Connectors.Azure
             Parallel.ForEach(groups, options, group =>
             {
                 var items = GetTestCases(group).Select(i => i.Id.ToInt());
-                var range = this.itemManagement.GetRhinoTestCases(ids: items);
+                var range = itemManagement.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -414,7 +414,7 @@ namespace Rhino.Connectors.Azure
             // setup
             const string ConfigurationName = "Rhino - Automation Configuration";
 
-            // from capabilites
+            // from capabilities
             var id = GetConfigurationId();
             if (id != -1)
             {
@@ -473,7 +473,7 @@ namespace Rhino.Connectors.Azure
             TestRun ??= new RhinoTestRun();
             TestRun.Context ??= new Dictionary<string, object>();
 
-            // from capabilites
+            // from capabilities
             var id = Configuration.GetAzureCapability(AzureCapability.TestConfiguration, -1);
 
             // set
@@ -570,7 +570,7 @@ namespace Rhino.Connectors.Azure
         private RunCreateModel GetCreateModel()
         {
             // setup
-            var plan = GetPlan();
+            var plan = GetFromOptions(AzureCapability.TestPlan);
             _ = int.TryParse(TestRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
 
             try
@@ -624,7 +624,9 @@ namespace Rhino.Connectors.Azure
         private IEnumerable<TestPoint> ValidatePoints(IEnumerable<TestPoint> testPoints)
         {
             // setup
-            var testPlan = GetPlan();
+            var testPlan = GetFromOptions(AzureCapability.TestPlan);
+            var testSuiteOption = GetFromOptions(AzureCapability.TestSuite);
+            var isTestSuiteProvided = testSuiteOption != -1;
             var testPointsResults = new ConcurrentBag<TestPoint>();
 
             // build
@@ -639,7 +641,10 @@ namespace Rhino.Connectors.Azure
                          .GetPointAsync(project, testPlan, testSuite, testPoint.Id)
                          .GetAwaiter()
                          .GetResult();
-                    testPointsResults.Add(point);
+                    if(!isTestSuiteProvided || testSuiteOption == testSuite)
+                    {
+                        testPointsResults.Add(point);
+                    }
                 }
                 catch (Exception e) when (e != null)
                 {
@@ -651,21 +656,21 @@ namespace Rhino.Connectors.Azure
             return testPointsResults;
         }
 
-        private int GetPlan()
+        private int GetFromOptions(string optionsEntry)
         {
             // setup
             var optionsKey = $"{Connector.AzureTestManager}:options";
             var azureOptions = Configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
 
             // exit conditions
-            if (!azureOptions.ContainsKey(AzureCapability.TestPlan))
+            if (!azureOptions.ContainsKey(optionsEntry))
             {
                 return -1;
             }
 
             // get
-            var isPlan = int.TryParse($"{azureOptions[AzureCapability.TestPlan]}", out int planOut);
-            return isPlan ? planOut : -1;
+            var found = int.TryParse($"{azureOptions[optionsEntry]}", out int intOut);
+            return found ? intOut : -1;
         }
         #endregion
 

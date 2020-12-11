@@ -28,6 +28,11 @@ namespace Rhino.Connectors.Azure.Contracts
         public const string TestPlan = "testPlan";
 
         /// <summary>
+        /// Use to hold Test Suite ID within the capabilities context.
+        /// </summary>
+        public const string TestSuite = "testSuite";
+
+        /// <summary>
         /// The test configuration ID which will be used when running the current tests. If not selected, defaults values will be used.
         /// </summary>
         public const string TestConfiguration = "testConfiguration";
