@@ -25,7 +25,7 @@ namespace Rhino.Connectors.Azure
     /// </summary>
     [Connector(
         value: Connector.AzureTestManager,
-        Name = "Connector - Azure DevOps & Team Foundation Server (TFS).",
+        Name = "Connector - Azure DevOps & Team Foundation Server (TFS)",
         Description = "Allows to execute Rhino Specs from Azure DevOps or Team Foundation Server Test Case work items and report back as Test Runs.")]
     public class AzureConnector : RhinoConnector
     {
