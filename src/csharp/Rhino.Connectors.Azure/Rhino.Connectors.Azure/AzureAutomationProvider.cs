@@ -30,6 +30,7 @@ using Rhino.Api.Contracts.Extensions;
 using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Extensions;
+using Rhino.Connectors.Azure.Framework;
 
 using System;
 using System.Collections.Concurrent;
@@ -68,8 +69,9 @@ namespace Rhino.Connectors.Azure
 
         // members
         private readonly ILogger logger;
-        private readonly string project;
         private readonly ParallelOptions options;
+        private readonly AzureBugsManager bugsManager;
+        private readonly string project;
 
         #region *** Constructors      ***
         /// <summary>
@@ -102,6 +104,7 @@ namespace Rhino.Connectors.Azure
             this.logger = logger;
             var credentials = configuration.GetVssCredentials();
             connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
+            bugsManager = new AzureBugsManager(connection);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
             project = configuration.ConnectorConfiguration.Project;
@@ -877,6 +880,18 @@ namespace Rhino.Connectors.Azure
             UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
         }
 
+        private TestCaseResult DoGetTestCaseResult(RhinoTestCase testCase)
+        {
+            // setup
+            _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
+
+            // get test results
+            return testManagement.GetTestResultsAsync(project, runIdOut)
+                .GetAwaiter()
+                .GetResult()
+                .Find(i => i.TestCase.Id.Equals(testCase.Key));
+        }
+
         private void UploadAttachments(IEnumerable<TestAttachmentRequestModel> attachments, int runId, int resultId, int iteration)
         {
             // setup
@@ -945,6 +960,80 @@ namespace Rhino.Connectors.Azure
         }
         #endregion
 
+        #region *** Bugs & Defects    ***
+        /// <summary>
+        /// Gets a list of open bugs.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to find bugs.</param>
+        /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
+        public override IEnumerable<string> OnGetBugs(RhinoTestCase testCase)
+        {
+            return bugsManager.GetBugs(testCase);
+        }
+
+        /// <summary>
+        /// Asserts if the RhinoTestCase has already an open bug.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to assert against match bugs.</param>
+        /// <returns>An open bug.</returns>
+        public override string OnGetOpenBug(RhinoTestCase testCase)
+        {
+            return bugsManager.GetOpenBug(testCase);
+        }
+
+        /// <summary>
+        /// Creates a new bug under the specified automation provider.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to create automation provider bug.</param>
+        /// <returns>The ID of the newly created entity.</returns>
+        public override string OnCreateBug(RhinoTestCase testCase)
+        {
+            return bugsManager.OnCreateBug(testCase);
+        }
+
+        /// <summary>
+        /// Executes a routine of post bug creation.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase to execute routine on.</param>
+        public override void OnPostCreateBug(RhinoTestCase testCase)
+        {
+            // exit conditions
+            // collect bug data
+            // create link and add to relevant entities
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Updates an existing bug (partial updates are supported, i.e. you can submit and update specific fields only).
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update automation provider bug.</param>
+        /// <returns>The updated bug.</returns>
+        public override string OnUpdateBug(RhinoTestCase testCase)
+        {
+            return bugsManager.OnUpdateBug(testCase, "Done", string.Empty); // status and resolution apply here only for duplicates.
+        }
+
+        /// <summary>
+        /// Close all existing bugs.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
+        /// <returns>A collection of updated bugs.</returns>
+        public override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
+        {
+            return bugsManager.OnCloseBugs(testCase, "Done", string.Empty);
+        }
+
+        /// <summary>
+        /// Close all existing bugs.
+        /// </summary>
+        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
+        /// <returns>The closed bug.</returns>
+        public override string OnCloseBug(RhinoTestCase testCase)
+        {
+            return bugsManager.OnCloseBug(testCase, "Done", string.Empty);
+        }
+        #endregion
+
         // UTILITIES
         private IEnumerable<TestCaseResult> GetTestRunResults(TestRun testRun)
         {
@@ -977,18 +1066,6 @@ namespace Rhino.Connectors.Azure
 
             // get
             return iterations.Clone();
-        }
-
-        private TestCaseResult DoGetTestCaseResult(RhinoTestCase testCase)
-        {
-            // setup
-            _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
-
-            // get test results
-            return testManagement.GetTestResultsAsync(project, runIdOut)
-                .GetAwaiter()
-                .GetResult()
-                .Find(i => i.TestCase.Id.Equals(testCase.Key));
         }
     }
 }
