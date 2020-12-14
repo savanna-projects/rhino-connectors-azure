@@ -3,6 +3,8 @@
  * 
  * RESOURCES
  */
+using HtmlAgilityPack;
+
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
@@ -484,6 +486,13 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns><see cref="true"/> if match, <see cref="false"/> if not.</returns>
         public static bool IsBugMatch(this RhinoTestCase testCase, WorkItem bug, bool assertDataSource)
         {
+            // setup
+            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}";
+
+            // load into DOM element
+            var bugDocument = new HtmlDocument();
+            bugDocument.LoadHtml(bugHtml);
+
             throw new NotImplementedException();
         }
 

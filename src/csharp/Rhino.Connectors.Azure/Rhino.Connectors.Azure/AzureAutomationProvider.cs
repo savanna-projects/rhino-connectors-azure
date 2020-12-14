@@ -104,10 +104,10 @@ namespace Rhino.Connectors.Azure
             this.logger = logger;
             var credentials = configuration.GetVssCredentials();
             connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
-            bugsManager = new AzureBugsManager(connection);
+            project = configuration.ConnectorConfiguration.Project;
+            bugsManager = new AzureBugsManager(connection, project);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
-            project = configuration.ConnectorConfiguration.Project;
             options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
 
             // cache project
