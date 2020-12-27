@@ -13,6 +13,8 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
 
+using Newtonsoft.Json;
+
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Extensions;
@@ -93,7 +95,7 @@ namespace Rhino.Connectors.Azure.Framework
         /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
         public IEnumerable<string> GetBugs(RhinoTestCase testCase)
         {
-            return DoGetBugs(testCase).Select(i => $"{i}");
+            return DoGetBugs(testCase).Select(i => JsonConvert.SerializeObject(i));
         }
 
         /// <summary>
@@ -104,7 +106,7 @@ namespace Rhino.Connectors.Azure.Framework
         public string GetOpenBug(RhinoTestCase testCase)
         {
             // setup
-            var bugs = DoGetBugs(testCase);
+            var bugs = DoGetBugs(testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
 
             // get
             var openBug = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
