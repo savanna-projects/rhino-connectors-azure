@@ -3,12 +3,16 @@
  * 
  * RESOURCES
  */
+using HtmlAgilityPack;
+
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
+using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
@@ -469,6 +473,62 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // setup
             return testStep.Context[AzureContextEntry.StepAttachments] as IEnumerable<TestAttachmentRequestModel>;
+        }
+        #endregion
+
+        #region *** Rhino Test Case: Bugs     ***
+        /// <summary>
+        /// Return true if a bug meta data match to test meta data.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase to match to.</param>
+        /// <param name="bug">Bug <see cref="WorkItem"/> to match by.</param>
+        /// <param name="assertDataSource"><see cref="true"/> to match also RhinoTestCase.DataSource</param>
+        /// <returns><see cref="true"/> if match, <see cref="false"/> if not.</returns>
+        public static bool IsBugMatch(this RhinoTestCase testCase, WorkItem bug, bool assertDataSource)
+        {
+            // setup
+            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}";
+
+            // load into DOM element
+            var bugDocument = new HtmlDocument();
+            bugDocument.LoadHtml(bugHtml);
+
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Creates a bug based on this RhinoTestCase.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to create a bug.</param>
+        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
+        /// <returns>Bug creation results from Jira.</returns>
+        public static WorkItem CreateBug(this RhinoTestCase testCase, VssConnection connection)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Updates a bug based on this RhinoTestCase.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to update a bug.</param>
+        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
+        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
+        /// <returns><see cref="true"/> if successful, <see cref="false"/> if not.</returns>
+        public static bool UpdateBug(this RhinoTestCase testCase, string id, VssConnection connection)
+        {
+            throw new NotImplementedException();
+        }
+
+        /// <summary>
+        /// Close a bug based on this RhinoTestCase.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to close a bug.</param>
+        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
+        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
+        /// <returns><see cref="true"/> if close was successful, <see cref="false"/> if not.</returns>
+        public static bool CloseBug(this RhinoTestCase testCase, string id, VssConnection connection)
+        {
+            throw new NotImplementedException();
         }
         #endregion
 
