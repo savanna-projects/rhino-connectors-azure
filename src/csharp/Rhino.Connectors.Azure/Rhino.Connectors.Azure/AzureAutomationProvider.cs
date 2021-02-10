@@ -26,7 +26,6 @@ using Newtonsoft.Json.Serialization;
 using Rhino.Api;
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
-using Rhino.Api.Contracts.Extensions;
 using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Extensions;
@@ -169,7 +168,7 @@ namespace Rhino.Connectors.Azure
             try
             {
                 var range = method.Invoke(this, new object[] { ids }) as IEnumerable<RhinoTestCase>;
-                range = range == default ? Array.Empty<RhinoTestCase>() : range;
+                range ??= Array.Empty<RhinoTestCase>();
                 testCases.AddRange(range);
             }
             catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
@@ -735,7 +734,7 @@ namespace Rhino.Connectors.Azure
         private static TestCaseResult OnCompleteTestRun(RhinoTestRun testRun, TestCaseResult caseResult)
         {
             // setup
-            var result = caseResult.Clone();
+            var result = Gravity.Extensions.ObjectExtensions.Clone(caseResult);
             var testCase = testRun.TestCases.FirstOrDefault(i => i.Key == result.TestCase.Id);
 
             // exit conditions
@@ -1065,7 +1064,7 @@ namespace Rhino.Connectors.Azure
             }
 
             // get
-            return iterations.Clone();
+            return Gravity.Extensions.ObjectExtensions.Clone(iterations);
         }
     }
 }

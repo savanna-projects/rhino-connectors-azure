@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.1;net5.0</TargetFrameworks>
+    <TargetFrameworks>net5.0</TargetFrameworks>
     <PackageId>Rhino.Connectors.Azure</PackageId>
     <LangVersion>latest</LangVersion>
     <Title>Rhino Azure Connector - Connector for Azure DevOps and Team Foundation Server (TFS).</Title>
@@ -17,7 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.TeamFoundationServer.Client" Version="16.170.0" />
     <PackageReference Include="Microsoft.VisualStudio.Services.Client" Version="16.170.0" />
-    <PackageReference Include="Rhino.Api" Version="2021.1.20.1" />    
+    <PackageReference Include="Rhino.Api" Version="2021.2.9.1" />    
     <PackageReference Include="Rhino.Connectors.Azure.WebApi" Version="16.162.29627.1" />
   </ItemGroup>
 
