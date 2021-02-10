@@ -11,13 +11,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{2DA549C5
 		..\..\..\build\azure_rhino_template.yml = ..\..\..\build\azure_rhino_template.yml
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documents", "Documents", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
 	ProjectSection(SolutionItems) = preProject
 		..\..\..\docs\basics\ConnectorCapabilities.md = ..\..\..\docs\basics\ConnectorCapabilities.md
 		..\..\..\README.md = ..\..\..\README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{6807803A-0674-4358-A836-D2E414A0B55E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TestSettings", "TestSettings", "{6807803A-0674-4358-A836-D2E414A0B55E}"
 	ProjectSection(SolutionItems) = preProject
 		..\..\..\test\azure_settings_mstest.runsettings = ..\..\..\test\azure_settings_mstest.runsettings
 	EndProjectSection
