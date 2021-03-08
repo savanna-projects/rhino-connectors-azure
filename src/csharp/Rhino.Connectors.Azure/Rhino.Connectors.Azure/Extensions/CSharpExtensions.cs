@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -58,7 +59,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
-        /// Normalize HTML encoded chars on Azure HTML fileds.
+        /// Normalize HTML encoded chars on Azure HTML fields.
         /// </summary>
         /// <param name="str"><see cref="string"/> HTML to normalize.</param>
         /// <returns>Normalized <see cref="string"/>.</returns>
@@ -73,7 +74,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// UTC - ISO 8601 (2012-03-19T07:22Z) format.
         /// </summary>
         /// <param name="dateTime"><see cref="DateTime"/> to convert.</param>
-        /// <returns>ISO 8601 formattef.</returns>
+        /// <returns>ISO 8601 formatter.</returns>
         public static DateTime AzureNow(this DateTime dateTime, bool addMilliseconds)
         {
             // with milliseconds
@@ -99,6 +100,39 @@ namespace Rhino.Connectors.Azure.Extensions
                 minute: dateTime.Minute,
                 second: dateTime.Second,
                 kind: dateTime.Kind);
+        }
+
+        public static T Get<T>(this IDictionary<string, object> dictionary, string key, T defaultValue)
+        {
+            // exit conditions
+            if (!dictionary.ContainsKey(key))
+            {
+                return defaultValue;
+            }
+
+            // build
+            try
+            {
+                if (!typeof(IDictionary<string, object>).IsAssignableFrom(typeof(T)))
+                {
+                    return (T)dictionary[key];
+                }
+
+                var isJsonElement = dictionary[key] is JsonElement;
+                var isJsonToken = dictionary[key] is Newtonsoft.Json.Linq.JToken;
+
+                if(!isJsonElement && !isJsonToken)
+                {
+                    return (T)dictionary[key];
+                }
+
+                var json = JsonSerializer.Serialize(dictionary[key]);
+                return JsonSerializer.Deserialize<T>(json);
+            }
+            catch (Exception e) when (e != null)
+            {
+                return defaultValue;
+            }
         }
     }
 }

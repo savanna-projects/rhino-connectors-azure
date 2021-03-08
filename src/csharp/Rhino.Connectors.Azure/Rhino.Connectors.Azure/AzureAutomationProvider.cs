@@ -420,7 +420,7 @@ namespace Rhino.Connectors.Azure
             var id = GetConfigurationId();
             if (id != -1)
             {
-                AddConfigurationToTestContext(id);
+                AddConfigurationToTestContext(GetConfiguration(id));
                 return;
             }
 
@@ -436,6 +436,7 @@ namespace Rhino.Connectors.Azure
                 if (testConfiguration != default)
                 {
                     TestRun.Context[AzureContextEntry.TestConfiguration] = testConfiguration;
+                    AddConfigurationToTestContext(testConfiguration);
                     return;
                 }
 
@@ -466,7 +467,13 @@ namespace Rhino.Connectors.Azure
             }
 
             // put to context
-            AddConfigurationToTestContext(id);
+            var configuration = GetConfiguration(id);
+            AddConfigurationToTestContext(configuration);
+        }
+
+        private Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration GetConfiguration(int id)
+        {
+            return planManagement.GetTestConfigurationByIdAsync(project, id).GetAwaiter().GetResult();
         }
 
         private int GetConfigurationId()
@@ -492,15 +499,22 @@ namespace Rhino.Connectors.Azure
             return id;
         }
 
-        private void AddConfigurationToTestContext(int id)
+        private void AddConfigurationToTestContext(Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration configuration)
         {
+            if(configuration == null)
+            {
+                return;
+            }
+
             // test run
-            TestRun.Context[AzureContextEntry.ConfigurationId] = id;
+            TestRun.Context[AzureContextEntry.ConfigurationId] = configuration.Id;
+            TestRun.Context[AzureContextEntry.TestConfiguration] = configuration;
 
             // test cases
             foreach (var testCase in TestRun.TestCases)
             {
-                testCase.Context[AzureContextEntry.ConfigurationId] = id;
+                testCase.Context[AzureContextEntry.ConfigurationId] = configuration.Id;
+                testCase.Context[AzureContextEntry.TestConfiguration] = configuration;
             }
         }
         #endregion
@@ -662,7 +676,7 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var optionsKey = $"{Connector.AzureTestManager}:options";
-            var azureOptions = Configuration.Capabilities.GetCastedValueOrDefault(optionsKey, new Dictionary<string, object>());
+            var azureOptions = CSharpExtensions.Get(Configuration.Capabilities, optionsKey, new Dictionary<string, object>());
 
             // exit conditions
             if (!azureOptions.ContainsKey(optionsEntry))
@@ -775,7 +789,7 @@ namespace Rhino.Connectors.Azure
         public override void OnUpdateTestResult(RhinoTestCase testCase)
         {
             // setup
-            var outcome = testCase.Context.GetCastedValueOrDefault(AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
+            var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
             var result = GetTestCaseResult(testCase);
 
             // exit conditions
@@ -851,7 +865,7 @@ namespace Rhino.Connectors.Azure
         public override void OnAddAttachement(RhinoTestCase testCase)
         {
             // exit conditions
-            var outcome = testCase.Context.GetCastedValueOrDefault(AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
+            var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
             var incluededOutcomes = new[]
             {
                 nameof(TestOutcome.Passed),

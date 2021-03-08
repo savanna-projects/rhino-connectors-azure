@@ -6,14 +6,11 @@
 using Gravity.Abstraction.Logging;
 using Gravity.Extensions;
 
-using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
-
-using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Extensions;
@@ -23,11 +20,10 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-using TestPoint = Microsoft.TeamFoundation.TestManagement.WebApi.TestPoint;
-using Utilities = Rhino.Api.Extensions.Utilities;
 using WorkItem = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models.WorkItem;
 
 namespace Rhino.Connectors.Azure.Framework
@@ -95,7 +91,7 @@ namespace Rhino.Connectors.Azure.Framework
         /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
         public IEnumerable<string> GetBugs(RhinoTestCase testCase)
         {
-            return DoGetBugs(testCase).Select(i => JsonConvert.SerializeObject(i));
+            return DoGetBugs(testCase).Select(i => JsonSerializer.Serialize(i));
         }
 
         /// <summary>
@@ -109,18 +105,22 @@ namespace Rhino.Connectors.Azure.Framework
             var bugs = DoGetBugs(testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
 
             // get
-            var openBug = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
+            var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
+            if (!openBugs.Any())
+            {
+                return string.Empty;
+            }
 
             // assert
-            var onBug = openBug.FirstOrDefault();
+            var onBug = openBugs.FirstOrDefault();
 
             // get
-            return GetOpenBug(testCase, $"{onBug?.Id}");
-        }
-
-        private string GetOpenBug(RhinoTestCase testCase, string id)
-        {
-            throw new NotImplementedException();
+            var bugEntity = itemManagement
+                .GetWorkItemAsync(onBug.Id.ToInt(), expand: WorkItemExpand.All)
+                .GetAwaiter()
+                .GetResult()
+                .Relations;
+            return JsonSerializer.Serialize(bugEntity);
         }
         #endregion
 
