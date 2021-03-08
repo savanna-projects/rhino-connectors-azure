@@ -13,6 +13,7 @@ using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 
 using Rhino.Api.Contracts.AutomationProvider;
+//using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 
 using System;
@@ -46,7 +47,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>Value.</returns>
         public static T GetField<T>(this WorkItem item, string field, T defaultValue)
         {
-            return item.Fields.GetCastedValueOrDefault(key: field, @default: defaultValue);
+            return item.Fields.Get(key: field, defaultValue);
         }
         #endregion
 
@@ -162,7 +163,7 @@ namespace Rhino.Connectors.Azure.Extensions
             foreach (var item in items)
             {
                 // exit conditions
-                var stepsHtml = item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml();
+                var stepsHtml = item.Fields.Get("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml();
                 var stepsDocument = new HtmlDocument();
 
                 // load
@@ -173,8 +174,8 @@ namespace Rhino.Connectors.Azure.Extensions
                 {
                     Key = $"{item.Id}"
                 };
-                testCase.Scenario = item.Fields.GetCastedValueOrDefault("System.Title", string.Empty);
-                testCase.Priority = $"{item.Fields.GetCastedValueOrDefault("Microsoft.VSTS.Common.Priority", 2L)}";
+                testCase.Scenario = item.Fields.Get("System.Title", string.Empty);
+                testCase.Priority = $"{item.Fields.Get("Microsoft.VSTS.Common.Priority", 2L)}";
                 testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
                 testCase.TotalSteps = testCase.Steps.Count();
                 testCase.DataSource = DoGetDataSource(item);
@@ -301,7 +302,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var xsd = item
                 .Fields
-                .GetCastedValueOrDefault("Microsoft.VSTS.TCM.LocalDataSource", string.Empty)
+                .Get("Microsoft.VSTS.TCM.LocalDataSource", string.Empty)
                 .Replace(" encoding=\"utf-16\"", string.Empty);
 
             // exit conditions
