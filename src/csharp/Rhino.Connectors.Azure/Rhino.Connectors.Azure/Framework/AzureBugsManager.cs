@@ -226,7 +226,7 @@ namespace Rhino.Connectors.Azure.Framework
             var bugs = Array.Empty<WorkItem>();
 
             // get conditions (double check for bugs)
-            if (!bugs.Any())
+            if (bugs.Length == 0)
             {
                 return string.Empty;
             }

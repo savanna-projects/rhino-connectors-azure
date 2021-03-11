@@ -9,11 +9,9 @@ using HtmlAgilityPack;
 
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
-using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 
 using Rhino.Api.Contracts.AutomationProvider;
-//using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 
 using System;
@@ -80,7 +78,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
                 // get
                 var plan = suites.FirstOrDefault(i => i.Id == suiteId)?.Plan;
-                return plan == default ? 0 : plan.Id;
+                return (plan?.Id) ?? 0;
             }
             catch (Exception e) when (e != null)
             {
@@ -276,8 +274,8 @@ namespace Rhino.Connectors.Azure.Extensions
             // build
             var rhinoStep = new RhinoTestStep
             {
-                Action = onStep[0].InnerText,
-                Expected = onStep[1].InnerText
+                Action = onStep[0].InnerText.Trim(),
+                Expected = onStep[1].InnerText.Trim()
             };
 
             // setup
