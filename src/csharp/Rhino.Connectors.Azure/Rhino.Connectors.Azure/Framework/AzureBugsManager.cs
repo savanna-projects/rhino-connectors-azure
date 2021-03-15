@@ -91,7 +91,7 @@ namespace Rhino.Connectors.Azure.Framework
         /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
         public IEnumerable<string> GetBugs(RhinoTestCase testCase)
         {
-            return DoGetBugs(testCase).Select(i => JsonSerializer.Serialize(i));
+            return itemManagement.GetBugs(testCase).Select(i => JsonSerializer.Serialize(i));
         }
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace Rhino.Connectors.Azure.Framework
         public string GetOpenBug(RhinoTestCase testCase)
         {
             // setup
-            var bugs = DoGetBugs(testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
+            var bugs = itemManagement.GetBugs(testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
 
             // get
             var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
@@ -193,7 +193,7 @@ namespace Rhino.Connectors.Azure.Framework
         public IEnumerable<string> OnCloseBugs(RhinoTestCase testCase, string status, string resolution)
         {
             // get existing bugs
-            var bugs = DoGetBugs(testCase)
+            var bugs = itemManagement.GetBugs(testCase)
                 .Select(i => $"{i.Id.ToInt()}")
                 .Where(i => !string.IsNullOrEmpty(i) && i != "0");
 
@@ -274,42 +274,5 @@ namespace Rhino.Connectors.Azure.Framework
             return onBugsClosed;
         }
         #endregion
-
-        // Utilities
-        private IEnumerable<WorkItem> DoGetBugs(RhinoTestCase testCase)
-        {
-            // get all related items
-            var relations = itemManagement
-                .GetWorkItemAsync(testCase.Key.ToInt(), expand: WorkItemExpand.All)
-                .GetAwaiter()
-                .GetResult()
-                .Relations;
-
-            // filter related items by relevant relation > extract id
-            var ids = relations
-                .Where(i => i.Rel.Equals(TestBugRelation, Comparison))
-                .Select(i => Regex.Match(i.Url, @"(?i)(?<=\/workItems\/)\d+").Value)
-                .AsNumbers();
-
-            // exit conditions
-            if (!ids.Any())
-            {
-                return Array.Empty<WorkItem>();
-            }
-
-            // setup
-            var items = new ConcurrentBag<WorkItem>();
-            var groups = ids.Split(20);
-
-            // fetch
-            Parallel.ForEach(groups, options, group =>
-            {
-                var range = itemManagement.GetWorkItemsAsync(group, expand: WorkItemExpand.All).GetAwaiter().GetResult();
-                items.AddRange(range);
-            });
-
-            // get
-            return items.Where(i => $"{i.Fields["System.WorkItemType"]}".Equals("Bug", Comparison));
-        }
     }
 }

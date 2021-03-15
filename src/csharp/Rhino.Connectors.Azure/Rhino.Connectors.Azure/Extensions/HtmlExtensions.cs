@@ -28,7 +28,7 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class HtmlExtensions
     {
-        #region *** Bug ***
+        #region *** Bug  ***
         /// <summary>
         /// Gets a bug HTML based on RhinoTestCase including context and results.
         /// </summary>
@@ -355,6 +355,47 @@ namespace Rhino.Connectors.Azure.Extensions
             return
                 $"<div style=\"font-weight:bold\">{pascalToken}</div>" +
                 $"<pre id=\"rh{pascalToken}\">{json}</pre>";
+        }
+        #endregion
+
+        #region *** Test ***
+        /// <summary>
+        /// Gets a collection of actions HTML based on RhinoTestCase.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase to create an HTML by.</param>
+        /// <returns>An HTML representation of the RhinoTestCase.Steps.</returns>
+        public static string GetStepsHtml(this RhinoTestCase testCase)
+        {
+            // setup
+            var steps = new List<string>();
+            var onSteps = testCase.Steps.ToArray();
+
+            // iterate
+            for (int i = 0; i < onSteps.Length; i++)
+            {
+                steps.Add(GetActionHtml(onSteps[i], id: i + 1));
+            }
+
+            // get
+            return $"<steps id=\"0\" last=\"{steps.Count}\">{string.Concat(steps)}</steps>";
+        }
+
+        private static string GetActionHtml(RhinoTestStep step, int id)
+        {
+            // setup
+            var expectedResults = step.Expected.Replace("\r", string.Empty).Replace("\n", "&lt;BR/&gt;").Trim();
+            var type = string.IsNullOrEmpty(step.Expected) ? "ActionStep" : "ValidateStep";
+            var expectedHtml = string.IsNullOrEmpty(step.Expected)
+                ? "&lt;DIV&gt;&lt;P&gt;&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;"
+                : "&lt;P&gt;[expected]&lt;/P&gt;";
+            var action = Regex.Replace(input: step.Action, pattern: @"^\d+\.\s+", replacement: string.Empty);
+
+            return
+                $"<step id=\"{id}\" type=\"{type}\">" +
+                $"<parameterizedString isformatted=\"true\">&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;{action}&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</parameterizedString>" +
+                $"<parameterizedString isformatted=\"true\">{expectedHtml.Replace("[expected]", expectedResults)}</parameterizedString>" +
+                "<description/>" +
+                "</step>";
         }
         #endregion
     }

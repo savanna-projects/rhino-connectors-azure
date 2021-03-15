@@ -19,6 +19,7 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
+using Microsoft.VisualStudio.Services.WebApi.Patch;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
@@ -347,7 +348,7 @@ namespace Rhino.Connectors.Azure
         public override string CreateTestCase(RhinoTestCase testCase)
         {
             // setup
-            var document = testCase.AsTestDocument();
+            var document = testCase.GetTestDocument(Operation.Add, "Automatically created by Rhino engine.");
 
             // post
             var item = itemManagement
@@ -535,7 +536,7 @@ namespace Rhino.Connectors.Azure
                 var azureTestRun = DoCreateTestRun(testRun);
 
                 // 2. Get Created Run
-                var testCaseResults = GetTestRunResults(azureTestRun);
+                var testCaseResults = azureTestRun.GetTestRunResults(testManagement);
 
                 // 3. Add Iterations                
                 foreach (var testCaseResult in testCaseResults)
@@ -703,7 +704,7 @@ namespace Rhino.Connectors.Azure
 
             // get test results
             var azureTestRun = testManagement.GetTestRunByIdAsync(project, testRun.Key.ToInt()).GetAwaiter().GetResult();
-            var runResults = GetTestRunResults(azureTestRun).Where(i => i.State != nameof(TestRunState.Completed)).ToList();
+            var runResults = azureTestRun.GetTestRunResults(testManagement).Where(i => i.State != nameof(TestRunState.Completed)).ToList();
 
             // setup conditions
             var isRunResultsOk = runResults.Count == 0;
@@ -887,7 +888,7 @@ namespace Rhino.Connectors.Azure
                 .GetResult();
 
             // setup
-            var attachments = testCase.Steps.SelectMany(i => i.CreateAttachments()).ToList();
+            var attachments = testCase.Steps.SelectMany(i => i.GetAttachments()).ToList();
 
             // post
             UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
@@ -1046,39 +1047,5 @@ namespace Rhino.Connectors.Azure
             return bugsManager.OnCloseBug(testCase, "Done", string.Empty);
         }
         #endregion
-
-        // UTILITIES
-        private IEnumerable<TestCaseResult> GetTestRunResults(TestRun testRun)
-        {
-            // setup
-            const int BatchSize = 1000;
-            var gropus = testRun.TotalTests > BatchSize ? (BatchSize / testRun.TotalTests) + 1 : 1;
-
-            // get flat results
-            var testCaseResults = new List<TestCaseResult>();
-            for (int i = 0; i < gropus; i++)
-            {
-                var range = testManagement
-                    .GetTestResultsAsync(project, testRun.Id, top: BatchSize, skip: i * BatchSize)
-                    .GetAwaiter()
-                    .GetResult();
-                testCaseResults.AddRange(range);
-            }
-
-            // get results with iterations
-            var iterations = new List<TestCaseResult>();
-            for (int i = 0; i < testCaseResults.Count; i++)
-            {
-                var id = 100000 + i;
-                var testCaseResult = testManagement
-                    .GetTestResultByIdAsync(project, testRun.Id, id, ResultDetails.Iterations)
-                    .GetAwaiter()
-                    .GetResult();
-                iterations.Add(testCaseResult);
-            }
-
-            // get
-            return Gravity.Extensions.ObjectExtensions.Clone(iterations);
-        }
     }
 }
