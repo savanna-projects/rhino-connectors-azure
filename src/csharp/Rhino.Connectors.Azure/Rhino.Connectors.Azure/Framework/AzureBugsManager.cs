@@ -102,25 +102,16 @@ namespace Rhino.Connectors.Azure.Framework
         public string GetOpenBug(RhinoTestCase testCase)
         {
             // setup
-            var bugs = itemManagement.GetBugs(testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
+            var bugs = testCase.GetOpenBugs(connection);
 
-            // get
-            var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
-            if (!openBugs.Any())
+            // exit conditions
+            if (!bugs.Any())
             {
                 return string.Empty;
             }
 
-            // assert
-            var onBug = openBugs.FirstOrDefault();
-
             // get
-            var bugEntity = itemManagement
-                .GetWorkItemAsync(onBug.Id.ToInt(), expand: WorkItemExpand.All)
-                .GetAwaiter()
-                .GetResult()
-                .Relations;
-            return JsonSerializer.Serialize(bugEntity);
+            return JsonSerializer.Serialize(bugs.First());
         }
         #endregion
 
@@ -138,16 +129,10 @@ namespace Rhino.Connectors.Azure.Framework
                 return string.Empty;
             }
 
-            // create bug
-            return DoCreateBug(testCase);
-        }
-
-        private string DoCreateBug(RhinoTestCase testCase)
-        {
-            // get bug response
+            // build
             var response = testCase.CreateBug(connection);
 
-            // results
+            // get
             return response == default ? "-1" : response.Url;
         }
         #endregion
@@ -156,8 +141,8 @@ namespace Rhino.Connectors.Azure.Framework
         /// <summary>
         /// Updates an existing bug (partial updates are supported, i.e. you can submit and update specific fields only).
         /// </summary>
-        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update automation provider bug.</param>
-        public string OnUpdateBug(RhinoTestCase testCase, string status, string resolution)
+        /// <param name="testCase">RhinoTestCase by which to update automation provider bug.</param>
+        public string OnUpdateBug(RhinoTestCase testCase)
         {
             // get existing bugs
             var isBugs = testCase.Context.ContainsKey("bugs") && testCase.Context["bugs"] != default;

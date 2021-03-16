@@ -1006,25 +1006,13 @@ namespace Rhino.Connectors.Azure
         }
 
         /// <summary>
-        /// Executes a routine of post bug creation.
-        /// </summary>
-        /// <param name="testCase">RhinoTestCase to execute routine on.</param>
-        public override void OnPostCreateBug(RhinoTestCase testCase)
-        {
-            // exit conditions
-            // collect bug data
-            // create link and add to relevant entities
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
         /// Updates an existing bug (partial updates are supported, i.e. you can submit and update specific fields only).
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update automation provider bug.</param>
         /// <returns>The updated bug.</returns>
         public override string OnUpdateBug(RhinoTestCase testCase)
         {
-            return bugsManager.OnUpdateBug(testCase, "Done", string.Empty); // status and resolution apply here only for duplicates.
+            return bugsManager.OnUpdateBug(testCase);
         }
 
         /// <summary>

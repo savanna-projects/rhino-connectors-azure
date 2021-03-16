@@ -5,8 +5,6 @@
  */
 using Gravity.Services.DataContracts;
 
-using Microsoft.TeamFoundation.TestManagement.WebApi;
-
 using Newtonsoft.Json.Linq;
 
 using Rhino.Api.Contracts.AutomationProvider;

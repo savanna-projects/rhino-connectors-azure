@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text.Json;
+using System.Web;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -63,12 +64,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// </summary>
         /// <param name="str"><see cref="string"/> HTML to normalize.</param>
         /// <returns>Normalized <see cref="string"/>.</returns>
-        public static string DecodeHtml(this string str) => str
-            .Replace("&lt;", "<")
-            .Replace("&gt;", ">")
-            .Replace("&amp;", "")
-            .Replace("nbsp;", "")
-            .Replace("<BR/>", "\n");
+        public static string DecodeHtml(this string str) => HttpUtility.HtmlDecode(str.Replace("<BR/>", "\n"));
 
         /// <summary>
         /// UTC - ISO 8601 (2012-03-19T07:22Z) format.

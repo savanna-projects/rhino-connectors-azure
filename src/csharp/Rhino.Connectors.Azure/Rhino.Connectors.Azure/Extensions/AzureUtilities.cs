@@ -18,6 +18,7 @@ namespace Rhino.Connectors.Azure.Extensions
 {
     internal static class AzureUtilities
     {
+        #region *** Path Document ***
         /// <summary>
         /// Creates a <see cref="JsonPatchDocument"/> from creating a <see cref="WorkItem"/>.
         /// </summary>
@@ -90,5 +91,6 @@ namespace Rhino.Connectors.Azure.Extensions
             // get
             return patchDocument;
         }
+        #endregion
     }
 }

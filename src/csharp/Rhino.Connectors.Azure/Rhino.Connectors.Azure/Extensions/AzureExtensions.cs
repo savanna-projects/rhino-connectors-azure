@@ -43,7 +43,72 @@ namespace Rhino.Connectors.Azure.Extensions
         private const SuiteEntryTypes TestEntryType = SuiteEntryTypes.TestCase;
         private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
 
+        #region *** Configuration    ***
+        /// <summary>
+        /// Gets a value from connector_azure:options dictionary under RhinoConfiguration.Capabilites.
+        /// </summary>
+        /// <typeparam name="T">The type of value to return.</typeparam>
+        /// <param name="configuration">RhinoConfiguration to get value from.</param>
+        /// <param name="capability">Capability name to get value from.</param>
+        /// <param name="defaultValue">The default value to return if the capability was not found.</param>
+        /// <returns>The value from the capability or default if not found.</returns>
+        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
+        {
+            // setup
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
+
+            // get
+            return options.Get(capability, defaultValue);
+        }
+
+        /// <summary>
+        /// Adds a value to connector_azure:options dictionary under RhinoConfiguration.Capabilites.
+        /// If the capability exists it will be overwritten.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration to add value to.</param>
+        /// <param name="capability">Capability name to add value to.</param>
+        /// <param name="value">The value to add.</param>
+        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
+        {
+            // setup
+            var optionsKey = $"{Connector.AzureTestManager}:options";
+            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
+
+            // put
+            options[capability] = value;
+            configuration.Capabilities[optionsKey] = options;
+        }
+        #endregion
+
         #region *** Rhino Test Case  ***
+        // *** Bugs ***
+        /// <summary>
+        /// A collection of <see cref="WorkItem"/> for all open bugs.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase to get bugs for.</param>
+        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> to use for getting bugs.</param>
+        /// <returns>A collection of <see cref="WorkItem"/>.</returns>
+        public static IEnumerable<WorkItem> GetOpenBugs(this RhinoTestCase testCase, WorkItemTrackingHttpClient client)
+        {
+            return DoGetOpenBugs(testCase, client);
+        }
+
+        /// <summary>
+        /// A collection of <see cref="WorkItem"/> for all open bugs.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase to get bugs for.</param>
+        /// <param name="connection"><see cref="VssConnection"/> to use for getting bugs.</param>
+        /// <returns>A collection of <see cref="WorkItem"/>.</returns>
+        public static IEnumerable<WorkItem> GetOpenBugs(this RhinoTestCase testCase, VssConnection connection)
+        {
+            // setup
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+
+            // get
+            return DoGetOpenBugs(testCase, client);
+        }
+
         // *** Work Item ***
         /// <summary>
         /// Gets the underline <see cref="WorkItem"/> from RhinoTestCase.Context or from ALM.
@@ -83,12 +148,16 @@ namespace Rhino.Connectors.Azure.Extensions
                 var project = DoGetProjectName(testCase);
                 _ = int.TryParse(testCase.Key, out int idOut);
 
-                // get
-                return connection
+                // build
+                item = connection
                     .GetClient<WorkItemTrackingHttpClient>()
                     .GetWorkItemAsync(project, id: idOut, fields: null, expand: WorkItemExpand.All)
                     .GetAwaiter()
                     .GetResult();
+                testCase.Context[AzureContextEntry.WorkItem] = item;
+
+                // get
+                return item;
             }
             catch (Exception e) when (e != null)
             {
@@ -116,8 +185,12 @@ namespace Rhino.Connectors.Azure.Extensions
                 var client = connection.GetClient<TestManagementHttpClient>();
                 var project = DoGetProjectName(testCase);
 
+                // build
+                var testRun = client.GetTestRunByIdAsync(project, testRunOut).GetAwaiter().GetResult();
+                testCase.Context[AzureContextEntry.TestRun] = testRun;
+
                 // get
-                return client.GetTestRunByIdAsync(project, testRunOut).GetAwaiter().GetResult();
+                return testRun;
             }
             catch (Exception e) when (e != null)
             {
@@ -414,6 +487,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static ShallowReference GetTestReference(this WorkItem item) => new ShallowReference
         {
             Id = $"{item.Id}",
+            Name = item.Fields.Get("System.Title", string.Empty),
             Url = item.Url
         };
 
@@ -427,6 +501,27 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setup
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
+
+            // create
+            DoCreateReleation(item, client, target, relation);
+        }
+
+        /// <summary>
+        /// Creates a relation between 2 <see cref="WorkItem"/>.
+        /// </summary>
+        /// <param name="item">The source <see cref="WorkItem"/> from which create a relation.</param>
+        /// <param name="target">The target <see cref="WorkItem"/> to which create a relation.</param>
+        /// <param name="relation">The relation name (e.g. Tests, Child, Tested By, etc.).</param>
+        public static void CreateReleation(
+            this WorkItem item, WorkItemTrackingHttpClient client, ShallowReference target, string relation)
+        {
+            DoCreateReleation(item, client, target, relation);
+        }
+
+        private static void DoCreateReleation(
+            WorkItem item, WorkItemTrackingHttpClient client, ShallowReference target, string relation)
+        {
+            // setup
             var relationType = client.GetRelationTypesAsync().GetAwaiter().GetResult().Find(i => i.Name.Equals(relation, Compare));
 
             // exit conditions
@@ -461,19 +556,6 @@ namespace Rhino.Connectors.Azure.Extensions
                 // ignore exceptions
             }
         }
-
-        /// <summary>
-        /// Gets a field from the WorkItem.Fields collection or default value if failed.
-        /// </summary>
-        /// <typeparam name="T">Type of field to return.</typeparam>
-        /// <param name="item">WorkItem to get field from.</param>
-        /// <param name="field">Field to extract.</param>
-        /// <param name="defaultValue">Default value if failed to get fields.</param>
-        /// <returns>Value.</returns>
-        public static T GetField<T>(this WorkItem item, string field, T defaultValue)
-        {
-            return item.Fields.Get(key: field, defaultValue);
-        }
         #endregion
 
         #region *** Test Plan Client ***
@@ -485,7 +567,14 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of <see cref="TestSuite.Id"/>.</returns>
         public static IEnumerable<int> FindTestSuites(this TestPlanHttpClient client, int id)
         {
-            return DoFindTestSuites(client, id);
+            try
+            {
+                return client.GetSuitesByTestCaseIdAsync(id).GetAwaiter().GetResult().Select(i => i.Id);
+            }
+            catch (Exception e) when (e != null)
+            {
+                return Array.Empty<int>();
+            }
         }
 
         /// <summary>
@@ -555,39 +644,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of bug <see cref="WorkItem"/>.</returns>
         public static IEnumerable<WorkItem> GetBugs(this WorkItemTrackingHttpClient client, RhinoTestCase testCase)
         {
-            // get all related items
-            var relations = client
-                .GetWorkItemAsync(testCase.Key.ToInt(), expand: WorkItemExpand.All)
-                .GetAwaiter()
-                .GetResult()
-                .Relations;
-
-            // filter related items by relevant relation > extract id
-            var ids = relations
-                .Where(i => i.Rel.Equals("Microsoft.VSTS.Common.TestedBy-Reverse", Compare))
-                .Select(i => Regex.Match(i.Url, @"(?i)(?<=\/workItems\/)\d+").Value)
-                .AsNumbers();
-
-            // exit conditions
-            if (!ids.Any())
-            {
-                return Array.Empty<WorkItem>();
-            }
-
-            // setup
-            var items = new ConcurrentBag<WorkItem>();
-            var groups = ids.Split(20);
-
-            // fetch
-            var options = new ParallelOptions { MaxDegreeOfParallelism = DoGetBucketSize(testCase) };
-            Parallel.ForEach(groups, options, group =>
-            {
-                var range = client.GetWorkItemsAsync(group, expand: WorkItemExpand.All).GetAwaiter().GetResult();
-                items.AddRange(range);
-            });
-
-            // get
-            return items.Where(i => $"{i.Fields["System.WorkItemType"]}".Equals("Bug", Compare));
+            return DoGetBugs(client, testCase);
         }
 
         /// <summary>
@@ -666,11 +723,14 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<RhinoTestStep> DoGetSteps(WorkItemTrackingHttpClient client, HtmlNodeCollection nodes)
         {
             // setup
-            var nodesQueue = new ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)>();
+            var nodesQueue = new ConcurrentStack<(IDictionary<string, object> Context, HtmlNode Node)>();
             var testSteps = new ConcurrentBag<RhinoTestStep>();
 
             // load initial
-            nodesQueue.PushRange(nodes.Select(i => (new Dictionary<string, object>(), i)));
+            foreach (var item in nodes.Select(i => (new Dictionary<string, object>(), i)))
+            {
+                nodesQueue.Push(item);
+            }
 
             // iterate
             while (!nodesQueue.IsEmpty)
@@ -689,10 +749,10 @@ namespace Rhino.Connectors.Azure.Extensions
 
         private static RhinoTestStep DoGetStep(
             WorkItemTrackingHttpClient client,
-            ConcurrentStack<(Dictionary<string, object> Context, HtmlNode Node)> nodes)
+            ConcurrentStack<(IDictionary<string, object> Context, HtmlNode Node)> nodes)
         {
             // setup > dequeue next
-            nodes.TryPop(out (Dictionary<string, object> Context, HtmlNode Node) stepOut);
+            nodes.TryPop(out (IDictionary<string, object> Context, HtmlNode Node) stepOut);
 
             // process step
             if (stepOut.Node.Name.Equals("step", StringComparison.OrdinalIgnoreCase))
@@ -702,13 +762,13 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // process shared steps
             var shared = client.GetWorkItemAsync(int.Parse(stepOut.Node.GetAttributeValue("ref", "0"))).GetAwaiter().GetResult();
-            var doc = new HtmlDocument();
-            doc.LoadHtml(shared.GetField("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml());
+            var stepsDocument = new HtmlDocument();
+            stepsDocument.LoadHtml(shared.Fields.Get("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml());
 
             // setup > enqueue next
             var sharedStepAction = stepOut.Node.GetAttributeValue("id", "0");
-            var range = new List<(Dictionary<string, object>, HtmlNode)>();
-            foreach (var node in doc.DocumentNode.SelectNodes(".//steps/step"))
+            var range = new List<(IDictionary<string, object>, HtmlNode)>();
+            foreach (var node in stepsDocument.DocumentNode.SelectNodes(".//steps/step"))
             {
                 var runtime = node.GetAttributeValue("id", "0");
                 var path =
@@ -736,7 +796,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return default;
         }
 
-        private static RhinoTestStep DoGetStep((Dictionary<string, object> Context, HtmlNode Node) step)
+        private static RhinoTestStep DoGetStep((IDictionary<string, object> Context, HtmlNode Node) step)
         {
             // setups
             var onStep = step.Node.SelectNodes(".//parameterizedstring");
@@ -859,34 +919,72 @@ namespace Rhino.Connectors.Azure.Extensions
         #endregion
 
         #region *** Utilities        ***
-        // gets test suites collection from work item
-        private static IEnumerable<int> DoFindTestSuites(TestPlanHttpClient client, int id)
-        {
-            try
-            {
-                return client.GetSuitesByTestCaseIdAsync(id).GetAwaiter().GetResult().Select(i => i.Id);
-            }
-            catch (Exception e) when (e != null)
-            {
-                return Array.Empty<int>();
-            }
-        }
+        // gets the test severity or default
+        private static string DoGetSeverity(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Severity) || testCase.Severity == "0"
+            ? "3 - Medium"
+            : testCase.Severity;
 
-        // gets azure project name from RhinoTestCase
-        private static string DoGetProjectName(RhinoTestCase testCase)
+        // get all open bugs for a test case & set context
+        private static IEnumerable<WorkItem> DoGetOpenBugs(RhinoTestCase testCase, WorkItemTrackingHttpClient client)
         {
             // setup
-            var isContext = testCase.Context?.ContainsKey(AzureContextEntry.WorkItem) == true;
-            var isWorkItem = isContext && testCase.Context[AzureContextEntry.WorkItem] is WorkItem;
+            var bugs = DoGetBugs(client, testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
+            var project = DoGetProjectName(testCase);
 
             // exit conditions
-            if (!isWorkItem)
+            var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
+            if (!openBugs.Any())
             {
-                return string.Empty;
+                return Array.Empty<WorkItem>();
             }
 
+            // build
+            openBugs = client
+                .GetWorkItemsAsync(project, openBugs.Select(i => i.Id.ToInt()), null, expand: WorkItemExpand.All)
+                .GetAwaiter()
+                .GetResult();
+            testCase.Context[AzureContextEntry.OpenBugs] = openBugs;
+
             // get
-            return $"{((WorkItem)testCase.Context[AzureContextEntry.WorkItem]).Fields["System.TeamProject"]}";
+            return openBugs;
+        }
+
+        // get all bugs for a test case
+        private static IEnumerable<WorkItem> DoGetBugs(WorkItemTrackingHttpClient client, RhinoTestCase testCase)
+        {
+            // get all related items
+            var relations = client
+                .GetWorkItemAsync(testCase.Key.ToInt(), expand: WorkItemExpand.All)
+                .GetAwaiter()
+                .GetResult()
+                .Relations;
+
+            // filter related items by relevant relation > extract id
+            var ids = relations
+                .Where(i => i.Rel.Equals("Microsoft.VSTS.Common.TestedBy-Reverse", Compare))
+                .Select(i => Regex.Match(i.Url, @"(?i)(?<=\/workItems\/)\d+").Value)
+                .AsNumbers();
+
+            // exit conditions
+            if (!ids.Any())
+            {
+                return Array.Empty<WorkItem>();
+            }
+
+            // setup
+            var items = new ConcurrentBag<WorkItem>();
+            var groups = ids.Split(20);
+
+            // fetch
+            var options = new ParallelOptions { MaxDegreeOfParallelism = DoGetBucketSize(testCase) };
+            Parallel.ForEach(groups, options, group =>
+            {
+                var range = client.GetWorkItemsAsync(group, expand: WorkItemExpand.All).GetAwaiter().GetResult();
+                items.AddRange(range);
+            });
+
+            // get
+            return items.Where(i => $"{i.Fields["System.WorkItemType"]}".Equals("Bug", Compare));
         }
 
         // gets the bucket size from the test context
@@ -915,11 +1013,6 @@ namespace Rhino.Connectors.Azure.Extensions
             ? "3"
             : Regex.Match(testCase.Priority, @"\d+").Value;
 
-        // gets the test severity or default
-        private static string DoGetSeverity(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Severity) || testCase.Severity == "0"
-            ? "3 - Medium"
-            : testCase.Severity;
-
         // gets a static list of custom fields from test context
         private static IDictionary<string, object> DoGetCustomFields(RhinoTestCase testCase)
         {
@@ -929,6 +1022,22 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return options.Get(AzureCapability.CustomFields, new Dictionary<string, object>());
+        }
+
+        // gets azure project name from RhinoTestCase
+        private static string DoGetProjectName(RhinoTestCase testCase)
+        {
+            // setup
+            var item = testCase.Context.Get<WorkItem>(AzureContextEntry.WorkItem, default);
+
+            // exit conditions
+            if (item == default)
+            {
+                return string.Empty;
+            }
+
+            // get
+            return item.Fields.Get("System.TeamProject", string.Empty);
         }
         #endregion
     }

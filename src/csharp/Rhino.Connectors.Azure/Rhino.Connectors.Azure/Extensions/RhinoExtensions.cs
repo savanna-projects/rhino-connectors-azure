@@ -22,15 +22,12 @@ using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Framework;
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -354,8 +351,8 @@ namespace Rhino.Connectors.Azure.Extensions
         public static bool IsBugMatch(this RhinoTestCase testCase, WorkItem bug, bool assertDataSource)
         {
             // setup
-            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}";
-            var testHtml = testCase.GetBugHtml();
+            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}".DecodeHtml();
+            var testHtml = testCase.GetBugHtml().DecodeHtml();
 
             // build: bug (target)
             var bugDocument = new HtmlDocument();
@@ -368,7 +365,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // assert
             var isIteration = AssertNode(bugDocument, testDocument, "//span[@id='rhIteration']");
             var isPlatform = AssertNode(bugDocument, testDocument, "//td[@id='rhPlatform']");
-            var isEnvironment = AssertNode(bugDocument, testDocument, "//ted[@id='rhEnvironment']");
+            var isEnvironment = AssertNode(bugDocument, testDocument, "//td[@id='rhEnvironment']");
             var isCapabilities = AssertNode(bugDocument, testDocument, "//pre[@id='rhCapabilities']");
             var isOptions = AssertNode(bugDocument, testDocument, "//pre[@id='rhOptions']");
             var isDataSource = AssertNode(bugDocument, testDocument, "//table[@id='rhDataSource']");
@@ -386,8 +383,8 @@ namespace Rhino.Connectors.Azure.Extensions
             var testNode = test.DocumentNode.SelectSingleNode(path);
 
             // build
-            var fromBug = bugNode == null ? string.Empty : bugNode.OuterHtml.Sort();
-            var fromTest = testNode == null ? string.Empty : testNode.OuterHtml.Sort();
+            var fromBug = bugNode == null ? string.Empty : bugNode.InnerText.Sort();
+            var fromTest = testNode == null ? string.Empty : testNode.InnerText.Sort();
 
             // get
             return fromBug.Equals(fromTest, StringComparison.OrdinalIgnoreCase);
@@ -473,6 +470,10 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns><see cref="true"/> if successful, <see cref="false"/> if not.</returns>
         public static bool UpdateBug(this RhinoTestCase testCase, string id, VssConnection connection)
         {
+            // 1. Get All Open
+            // 2. Find Duplicates
+            // 3. Close All Duplicates
+            // 4. Update Bug
             throw new NotImplementedException();
         }
 
@@ -512,42 +513,6 @@ namespace Rhino.Connectors.Azure.Extensions
             return isOs
                 ? CredentialsFactory.GetVssCredentials(new NetworkCredential(userName, password))
                 : CredentialsFactory.GetVssCredentials(userName, password);
-        }
-
-        /// <summary>
-        /// Gets a value from connector_azure:options dictionary under RhinoConfiguration.Capabilites.
-        /// </summary>
-        /// <typeparam name="T">The type of value to return.</typeparam>
-        /// <param name="configuration">RhinoConfiguration to get value from.</param>
-        /// <param name="capability">Capability name to get value from.</param>
-        /// <param name="defaultValue">The default value to return if the capability was not found.</param>
-        /// <returns>The value from the capability or default if not found.</returns>
-        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
-
-            // get
-            return options.Get(capability, defaultValue);
-        }
-
-        /// <summary>
-        /// Adds a value to connector_azure:options dictionary under RhinoConfiguration.Capabilites.
-        /// If the capability exists it will be overwritten.
-        /// </summary>
-        /// <param name="configuration">RhinoConfiguration to add value to.</param>
-        /// <param name="capability">Capability name to add value to.</param>
-        /// <param name="value">The value to add.</param>
-        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
-
-            // put
-            options[capability] = value;
-            configuration.Capabilities[optionsKey] = options;
         }
         #endregion
     }
