@@ -80,7 +80,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // iterate
             var operations = data.Select(i => new JsonPatchOperation
             {
-                Operation = operation,
+                Operation = i.Key.Equals("System.History") ? Operation.Add : operation,
                 Path = $"/fields/{i.Key}",
                 Value = $"{i.Value}"
             });

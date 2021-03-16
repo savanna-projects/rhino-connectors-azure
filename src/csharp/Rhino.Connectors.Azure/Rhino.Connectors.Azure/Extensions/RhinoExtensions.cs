@@ -435,6 +435,47 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return bug;
+        }        
+
+        // TODO: handle removing/adding new attachments
+        /// <summary>
+        /// Creates a bug based on this RhinoTestCase.
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to create a bug.</param>
+        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
+        /// <returns>Bug creation results from Jira.</returns>
+        public static WorkItem UpdateBug(this RhinoTestCase testCase, WorkItem bug, VssConnection connection)
+        {
+            // setup
+            var testRun = testCase.GetTestRun(connection);
+            var testCaseResults = testRun.GetTestRunResults(connection);
+            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key, Compare));
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
+            var project = testCase.GetProjectName();
+
+            // update Bug
+            var bugDocument = testCase.GetBugDocument(Operation.Replace, comment);
+            bug = client.UpdateWorkItemAsync(bugDocument, bug.Id.ToInt(), bypassRules: true).GetAwaiter().GetResult();
+            testCase.Context["openBug"] = bug;
+
+            // link test results to bug
+            if (testCaseResult == default)
+            {
+                return bug;
+            }
+
+            // update
+            testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+            testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+            connection
+                .GetClient<TestManagementHttpClient>()
+                .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
+                .GetAwaiter()
+                .GetResult();
+
+            // get
+            return bug;
         }
 
         private static void CreateAttachmentsForBug(WorkItemTrackingHttpClient client, RhinoTestCase testCase)
@@ -459,22 +500,6 @@ namespace Rhino.Connectors.Azure.Extensions
             // update
             var bug = JsonConvert.DeserializeObject<WorkItem>($"{testCase.Context[ContextEntry.BugOpened]}");
             client.UpdateWorkItemAsync(patchDocument, bug.Id.ToInt()).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Updates a bug based on this RhinoTestCase.
-        /// </summary>
-        /// <param name="testCase">RhinoTestCase by which to update a bug.</param>
-        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
-        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
-        /// <returns><see cref="true"/> if successful, <see cref="false"/> if not.</returns>
-        public static bool UpdateBug(this RhinoTestCase testCase, string id, VssConnection connection)
-        {
-            // 1. Get All Open
-            // 2. Find Duplicates
-            // 3. Close All Duplicates
-            // 4. Update Bug
-            throw new NotImplementedException();
         }
 
         /// <summary>

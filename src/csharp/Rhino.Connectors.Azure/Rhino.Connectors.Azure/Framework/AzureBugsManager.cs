@@ -11,6 +11,7 @@ using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
+using Microsoft.VisualStudio.Services.WebApi.Patch;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Extensions;
@@ -35,7 +36,7 @@ namespace Rhino.Connectors.Azure.Framework
     {
         // constants
         private const string TestBugRelation = "Microsoft.VSTS.Common.TestedBy-Reverse";
-        private const StringComparison Comparison = StringComparison.OrdinalIgnoreCase;
+        private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
 
         // members: clients
         private readonly WorkItemTrackingHttpClient itemManagement;
@@ -144,29 +145,33 @@ namespace Rhino.Connectors.Azure.Framework
         /// <param name="testCase">RhinoTestCase by which to update automation provider bug.</param>
         public string OnUpdateBug(RhinoTestCase testCase)
         {
-            // get existing bugs
-            var isBugs = testCase.Context.ContainsKey("bugs") && testCase.Context["bugs"] != default;
-            var bugs = isBugs ? (IEnumerable<string>)testCase.Context["bugs"] : Array.Empty<string>();
+            // setup
+            var openBugs = testCase.GetOpenBugs(connection).ToArray();
 
             // exit conditions
-            if (bugs.All(i => string.IsNullOrEmpty(i)))
+            if (openBugs.Length == 0)
             {
-                return "-1";
+                return string.Empty;
             }
 
-            // possible duplicates
-            if (bugs.Count() > 1)
+            // setup
+            var openBug = openBugs[0];
+
+            // find duplicates
+            if (openBugs.Length > 1)
             {
-                // TODO: implement
+                var duplicatesClosed = openBugs
+                    .Skip(1)
+                    .Select(i => i.SetState(connection, "Resolved", "Duplicate"))
+                    .All(i => i);
+                logger?.Info($"Update-Bug -Duplicates = {duplicatesClosed}");
             }
 
-            // update
-            bugs = Array.Empty<string>();
-
-            testCase.UpdateBug(id: bugs.FirstOrDefault(), connection);
+            // update Bug
+            var bug = testCase.UpdateBug(openBug, connection);
 
             // get
-            return $"{"bug url"}";
+            return JsonSerializer.Serialize(bug);
         }
         #endregion
 

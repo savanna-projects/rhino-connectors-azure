@@ -300,8 +300,13 @@ namespace Rhino.Connectors.Azure
             {
                 try
                 {
+                    var isGuid = Guid.TryParse(query, out Guid queryOut);
                     var wiql = new Wiql() { Query = query };
-                    var queryResults = itemManagement.QueryByWiqlAsync(wiql, project).GetAwaiter().GetResult();
+
+                    var queryResults = isGuid
+                        ? itemManagement.QueryByIdAsync(project, queryOut).GetAwaiter().GetResult()
+                        : itemManagement.QueryByWiqlAsync(wiql, project).GetAwaiter().GetResult();
+
                     var range = queryResults.WorkItems.Select(i => i.Id);
                     testCases.AddRange(range);
                 }

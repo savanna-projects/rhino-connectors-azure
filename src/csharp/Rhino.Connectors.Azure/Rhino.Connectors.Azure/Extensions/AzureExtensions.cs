@@ -480,6 +480,91 @@ namespace Rhino.Connectors.Azure.Extensions
 
         #region *** Work Item Object ***
         /// <summary>
+        /// Sets state and reason of a <see cref="WorkItem"/>.
+        /// </summary>
+        /// <param name="item">The <see cref="WorkItem"/>.</param>
+        /// <param name="connection">The <see cref="VssConnection"/> to use for settings.</param>
+        /// <param name="state">The state to set.</param>
+        /// <param name="reason">The reason to set.</param>
+        /// <returns><see cref="true"/> if successful or <see cref="false"/> if not.</returns>
+        public static bool SetState(this WorkItem item, VssConnection connection, string state, string reason)
+        {
+            // setup
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+
+            // set
+            return DoSetState(item, client, state, reason);
+        }
+
+        /// <summary>
+        /// Sets state and reason of a <see cref="WorkItem"/>.
+        /// </summary>
+        /// <param name="item">The <see cref="WorkItem"/>.</param>
+        /// <param name="client">The <see cref="WorkItemTrackingHttpClient"/> to use for settings.</param>
+        /// <param name="state">The state to set.</param>
+        /// <param name="reason">The reason to set.</param>
+        /// <returns><see cref="true"/> if successful or <see cref="false"/> if not.</returns>
+        public static bool SetState(
+            this WorkItem item, WorkItemTrackingHttpClient client, string state, string reason)
+        {
+            return DoSetState(item, client, state, reason);
+        }
+
+        private static bool DoSetState(
+            this WorkItem item, WorkItemTrackingHttpClient client, string state, string reason)
+        {
+            try
+            {
+                // setup
+                var document = new JsonPatchDocument();
+
+                // build
+                if (!string.IsNullOrEmpty(state))
+                {
+                    document.Add(new JsonPatchOperation
+                    {
+                        Operation = Operation.Replace,
+                        Path = "/fields/System.State",
+                        Value = state
+                    });
+                }
+                if (!string.IsNullOrEmpty(reason))
+                {
+                    document.Add(new JsonPatchOperation
+                    {
+                        Operation = Operation.Replace,
+                        Path = "/fields/System.Reason",
+                        Value = reason
+                    });
+                }
+
+                // exit conditions
+                if (!document.Any() || string.IsNullOrEmpty(state))
+                {
+                    return false;
+                }
+
+                var comment = string.IsNullOrEmpty(reason)
+                    ? $"Set to <b><u>{state}</u></b> by Rhino Engine."
+                    : $"Set to <b><u>{state}</u></b> by Rhino Engine, because of <b><u>{reason}</u></b>.";
+                document.Add(new JsonPatchOperation
+                {
+                    Operation = Operation.Add,
+                    Path = "/fields/System.History",
+                    Value = comment
+                });
+
+                // update
+                client.UpdateWorkItemAsync(document, item.Id.ToInt(), bypassRules: true).GetAwaiter().GetResult();
+                return true;
+            }
+            catch (Exception e) when (e != null)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Gets a <see cref="ShallowReference"/> for test results (bug or work item).
         /// </summary>
         /// <param name="item">The work item to create reference from.</param>
@@ -928,7 +1013,8 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<WorkItem> DoGetOpenBugs(RhinoTestCase testCase, WorkItemTrackingHttpClient client)
         {
             // setup
-            var bugs = DoGetBugs(client, testCase).Where(i => $"{i.Fields["System.State"]}" != "Closed");
+            var closeStatus = new[] { "Closed", "Resolved" };
+            var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
             var project = DoGetProjectName(testCase);
 
             // exit conditions
