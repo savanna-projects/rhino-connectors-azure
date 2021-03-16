@@ -6,9 +6,11 @@
 using HtmlAgilityPack;
 
 using Microsoft.TeamFoundation.TestManagement.WebApi;
+using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.Common;
 using Microsoft.VisualStudio.Services.WebApi;
+using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
 using Newtonsoft.Json;
@@ -22,13 +24,11 @@ using Rhino.Connectors.Azure.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Text.RegularExpressions;
-
-using TestConfiguration = Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -37,7 +37,10 @@ namespace Rhino.Connectors.Azure.Extensions
     /// </summary>
     internal static class RhinoExtensions
     {
-        #region *** Rhino Test Case: Models   ***
+        // constants
+        private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
+
+        #region *** Test: Models   ***
         /// <summary>
         /// Gets a basic <see cref="TestIterationDetailsModel"/> object.
         /// </summary>
@@ -111,7 +114,7 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 ActionPath = testStep.Context.Get(AzureContextEntry.SharedStepPath, "-1"),
                 IterationId = iteration,
-                SharedStepModel = new SharedStepModel { Id = id, Revision = GetSharedStepRevision(testStep) },
+                SharedStepModel = new SharedStepModel { Id = id, Revision = testStep.GetSharedStepsRevision() },
                 StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
                 CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false)
             };
@@ -133,7 +136,7 @@ namespace Rhino.Connectors.Azure.Extensions
         private static TestActionResultModel GetActionResultModel(RhinoTestStep testStep, int iteration, bool setOutcome)
         {
             // setup
-            var actionPath = GetActionPath(testStep, $"{iteration}");
+            var actionPath = testStep.GetActionPath(defaultValue: $"{iteration}");
 
             // build
             var actionResult = new TestActionResultModel
@@ -166,8 +169,8 @@ namespace Rhino.Connectors.Azure.Extensions
             // build
             for (int i = 0; i < steps.Count; i++)
             {
-                var actionPath = GetActionPath(steps[i], $"{iteration}");
-                var identifier = GetStepIdentifier(steps[i], $"{iteration}");
+                var actionPath = steps[i].GetActionPath(defaultValue: $"{iteration}");
+                var identifier = steps[i].GetActionIdentifier($"{iteration}");
                 var parameters = GetParameters(steps[i], testCase.DataSource);
 
                 var range = parameters.Select(i => new TestResultParameterModel
@@ -222,7 +225,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Rhino Test Case: Context  ***
+        #region *** Test: Context  ***
         /// <summary>
         /// Adds an item to RhinoTestCase.Context, replacing existing one if already present.
         /// </summary>
@@ -247,109 +250,13 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Rhino Test Case: Document ***
+        #region *** Test Case      ***
         /// <summary>
-        /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
+        /// Gets the RhinoTestCase.DataSource as XML string.
         /// </summary>
-        /// <param name="testCase">RhinoTestCase to created <see cref="JsonPatchDocument"/> by.</param>
-        /// <returns><see cref="JsonPatchDocument"/>.</returns>
-        public static JsonPatchDocument AsTestDocument(this RhinoTestCase testCase)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = testCase.Context.Get(optionsKey, new Dictionary<string, object>());
-            var fields = options.Get(AzureCapability.CustomFields, new Dictionary<string, object>());
-
-            // get
-            return DoAsTestDocument(testCase, fields);
-        }
-
-        /// <summary>
-        /// Gets a <see cref="JsonPatchDocument"/> ready for posting.
-        /// </summary>
-        /// <param name="testCase">RhinoTestCase to created <see cref="JsonPatchDocument"/> by.</param>
-        /// <param name="customFields">A collection of custom fields to apply.</param>
-        /// <returns><see cref="JsonPatchDocument"/>.</returns>
-        public static JsonPatchDocument AsTestDocument(this RhinoTestCase testCase, IDictionary<string, object> customFields)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = testCase.Context.Get(optionsKey, new Dictionary<string, object>());
-            var fields = options.Get(AzureCapability.CustomFields, new Dictionary<string, object>()).AddRange(customFields);
-
-            // get
-            return DoAsTestDocument(testCase, fields);
-        }
-
-        private static JsonPatchDocument DoAsTestDocument(RhinoTestCase testCase, IDictionary<string, object> customFields)
-        {
-            // setup
-            _ = int.TryParse(testCase.Priority, out int priorityOut);
-            var options = testCase
-                .Context
-                .Get($"{Connector.AzureTestManager}:options", new Dictionary<string, object>());
-
-            // initiate
-            var data = new Dictionary<string, object>
-            {
-                ["System.Title"] = testCase.Scenario,
-                ["Microsoft.VSTS.Common.Priority"] = priorityOut,
-                ["Microsoft.VSTS.TCM.Steps"] = GetStepsHtml(testCase)
-            };
-
-            // fields: area path
-            var areaPath = options.Get(AzureCapability.AreaPath, string.Empty);
-            AddToData(data, field: "System.AreaPath", value: areaPath);
-
-            // fields: iteration path
-            var iterationPathPath = options.Get(AzureCapability.IterationPath, string.Empty);
-            AddToData(data, field: "System.IterationPath", value: iterationPathPath);
-
-            // fields: data
-            AddToData(data, field: "Microsoft.VSTS.TCM.LocalDataSource", value: GetDataSourceXml(testCase));
-
-            // concat
-            data = data.AddRange(customFields);
-
-            // get
-            return AzureUtilities.GetJsonPatchDocument(data);
-        }
-
-        private static string GetStepsHtml(RhinoTestCase testCase)
-        {
-            // setup
-            var steps = new List<string>();
-            var onSteps = testCase.Steps.ToArray();
-
-            // iterate
-            for (int i = 0; i < onSteps.Length; i++)
-            {
-                steps.Add(GetActionHtml(onSteps[i], id: i + 1));
-            }
-
-            // get
-            return $"<steps id=\"0\" last=\"{steps.Count}\">{string.Concat(steps)}</steps>";
-        }
-
-        private static string GetActionHtml(RhinoTestStep step, int id)
-        {
-            // setup
-            var expectedResults = step.Expected.Replace("\r", string.Empty).Replace("\n", "&lt;BR/&gt;").Trim();
-            var type = string.IsNullOrEmpty(step.Expected) ? "ActionStep" : "ValidateStep";
-            var expectedHtml = string.IsNullOrEmpty(step.Expected)
-                ? "&lt;DIV&gt;&lt;P&gt;&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;"
-                : "&lt;P&gt;[expected]&lt;/P&gt;";
-            var action = Regex.Replace(input: step.Action, pattern: @"^\d+\.\s+", replacement: string.Empty);
-
-            return
-                $"<step id=\"{id}\" type=\"{type}\">" +
-                $"<parameterizedString isformatted=\"true\">&lt;DIV&gt;&lt;DIV&gt;&lt;P&gt;{action}&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;&lt;/DIV&gt;</parameterizedString>" +
-                $"<parameterizedString isformatted=\"true\">{expectedHtml.Replace("[expected]", expectedResults)}</parameterizedString>" +
-                "<description/>" +
-                "</step>";
-        }
-
-        private static string GetDataSourceXml(RhinoTestCase testCase)
+        /// <param name="testCase">RhinoTestCase to get by.</param>
+        /// <returns>XML string.</returns>
+        public static string GetDataSourceXml(this RhinoTestCase testCase)
         {
             // exit conditions
             if (testCase.DataSource?.Any() == false)
@@ -371,39 +278,22 @@ namespace Rhino.Connectors.Azure.Extensions
             // get
             return Encoding.UTF8.GetString(stream.ToArray());
         }
-
-        private static void AddToData<T>(IDictionary<string, object> data, string field, T value)
-        {
-            // exit conditions
-            if (value == null || string.IsNullOrEmpty($"{value}"))
-            {
-                return;
-            }
-
-            // add
-            data[field] = value;
-        }
         #endregion
 
-        #region *** Rhino Test Step: images   ***
+        #region *** Action: Images ***
         /// <summary>
         /// Get a collection of Attachment objects, ready to be uploaded.
         /// </summary>
         /// <param name="testStep">RhinoTestStep to build by.</param>
         /// <returns>A collection of <see cref="AttachmentReference"/> after uploaded.</returns>
-        public static IEnumerable<TestAttachmentRequestModel> CreateAttachments(this RhinoTestStep testStep)
-        {
-            return DoCreateAttachments(testStep);
-        }
-
-        private static IEnumerable<TestAttachmentRequestModel> DoCreateAttachments(RhinoTestStep testStep)
+        public static IEnumerable<TestAttachmentRequestModel> GetAttachments(this RhinoTestStep testStep)
         {
             // setup
             var images = testStep.GetScreenshots();
 
             // build
             var models = new List<TestAttachmentRequestModel>();
-            foreach (var attachment in images.Select(i => CreateAttachments(i, testStep.Context)))
+            foreach (var attachment in images.Select(i => testStep.GetAttachment(filePath: i)))
             {
                 byte[] bytes;
                 using (var memoryStream = new MemoryStream())
@@ -429,32 +319,6 @@ namespace Rhino.Connectors.Azure.Extensions
             return models;
         }
 
-        private static Attachment CreateAttachments(string image, IDictionary<string, object> context)
-        {
-            // setup
-            var name = Path.GetFileName(image);
-            var stepRuntime = context.Get(AzureContextEntry.StepRuntime, string.Empty);
-            var sharedRuntime = context.Get(AzureContextEntry.SharedStepRuntime, string.Empty);
-            var runtime = string.IsNullOrEmpty(stepRuntime) ? sharedRuntime : stepRuntime;
-            var item = context.Get(AzureContextEntry.WorkItem, new WorkItem() { Fields = new Dictionary<string, object>() });
-            var project = item.Fields.Get("System.TeamProject", string.Empty);
-            var areaPath = item.Fields.Get("System.AreaPath", string.Empty);
-
-            // build
-            return new Attachment
-            {
-                ActionPath = string.Empty,
-                ActionRuntime = runtime,
-                Type = nameof(AttachmentType.GeneralAttachment),
-                FullName = image,
-                Name = name,
-                UploadStream = new FileStream(image, FileMode.Open, FileAccess.Read),
-                Project = string.IsNullOrEmpty(project) ? null : project,
-                AreaPath = string.IsNullOrEmpty(areaPath) ? null : areaPath,
-                IterationId = context.Get(AzureContextEntry.IterationDetails, 0)
-            };
-        }
-
         /// <summary>
         /// Gets a collection of <see cref="TestAttachmentRequestModel"/> for RhinoTestStep.
         /// </summary>
@@ -477,7 +341,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Rhino Test Case: Bugs     ***
+        #region *** Test: Bugs     ***
         /// <summary>
         /// Return true if a bug meta data match to test meta data.
         /// </summary>
@@ -488,14 +352,43 @@ namespace Rhino.Connectors.Azure.Extensions
         public static bool IsBugMatch(this RhinoTestCase testCase, WorkItem bug, bool assertDataSource)
         {
             // setup
-            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}";
-            var h = GetBugHtml(testCase);
+            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}".DecodeHtml();
+            var testHtml = testCase.GetBugHtml().DecodeHtml();
 
-            // load into DOM element
+            // build: bug (target)
             var bugDocument = new HtmlDocument();
             bugDocument.LoadHtml(bugHtml);
 
-            throw new NotImplementedException();
+            // build: test case (source)
+            var testDocument = new HtmlDocument();
+            testDocument.LoadHtml(testHtml);
+
+            // assert
+            var isIteration = AssertNode(bugDocument, testDocument, "//span[@id='rhIteration']");
+            var isPlatform = AssertNode(bugDocument, testDocument, "//td[@id='rhPlatform']");
+            var isEnvironment = AssertNode(bugDocument, testDocument, "//td[@id='rhEnvironment']");
+            var isCapabilities = AssertNode(bugDocument, testDocument, "//pre[@id='rhCapabilities']");
+            var isOptions = AssertNode(bugDocument, testDocument, "//pre[@id='rhOptions']");
+            var isDataSource = AssertNode(bugDocument, testDocument, "//table[@id='rhDataSource']");
+
+            // get
+            return assertDataSource
+                ? isIteration && isPlatform && isEnvironment && isCapabilities && isOptions && isDataSource
+                : isIteration && isPlatform && isEnvironment && isCapabilities && isOptions;
+        }
+
+        private static bool AssertNode(HtmlDocument bug, HtmlDocument test, string path)
+        {
+            // setup
+            var bugNode = bug.DocumentNode.SelectSingleNode(path);
+            var testNode = test.DocumentNode.SelectSingleNode(path);
+
+            // build
+            var fromBug = bugNode == null ? string.Empty : bugNode.InnerText.Sort();
+            var fromTest = testNode == null ? string.Empty : testNode.InnerText.Sort();
+
+            // get
+            return fromBug.Equals(fromTest, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -507,221 +400,121 @@ namespace Rhino.Connectors.Azure.Extensions
         public static WorkItem CreateBug(this RhinoTestCase testCase, VssConnection connection)
         {
             // setup
-            var bugHtml = GetBugHtml(testCase);
-            throw new NotImplementedException();
+            var project = testCase.GetProjectName();
+            var testRun = testCase.GetTestRun(connection);
+            var testCaseResults = testRun.GetTestRunResults(connection);
+            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key, Compare));
+
+            var document = testCase.GetBugDocument(
+                operation: Operation.Add,
+                comment: $"Automatically created by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.");
+
+            // build
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+
+            // get
+            var bug = client.CreateWorkItemAsync(document, project, "Bug").GetAwaiter().GetResult();
+
+            // post create
+            bug = CreateAttachmentsForBug(client, testCase, bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
+
+            // link test results to bug
+            if (testCaseResult != default)
+            {
+                testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+                testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+                connection
+                    .GetClient<TestManagementHttpClient>()
+                    .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+
+            // link bug to test case
+            bug.CreateReleation(connection, testCase.GetWorkItem().GetTestReference(), "Tested By");
+
+            // get
+            return bug;
         }
 
         /// <summary>
-        /// Updates a bug based on this RhinoTestCase.
+        /// Creates a bug based on this RhinoTestCase.
         /// </summary>
-        /// <param name="testCase">RhinoTestCase by which to update a bug.</param>
-        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
+        /// <param name="testCase">RhinoTestCase by which to create a bug.</param>
         /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
-        /// <returns><see cref="true"/> if successful, <see cref="false"/> if not.</returns>
-        public static bool UpdateBug(this RhinoTestCase testCase, string id, VssConnection connection)
-        {
-            throw new NotImplementedException();
-        }
-
-        /// <summary>
-        /// Close a bug based on this RhinoTestCase.
-        /// </summary>
-        /// <param name="testCase">RhinoTestCase by which to close a bug.</param>
-        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
-        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
-        /// <returns><see cref="true"/> if close was successful, <see cref="false"/> if not.</returns>
-        public static bool CloseBug(this RhinoTestCase testCase, string id, VssConnection connection)
-        {
-            throw new NotImplementedException();
-        }
-
-        // get bug HTML
-        private static string GetBugHtml(RhinoTestCase testCase)
+        /// <returns>Bug creation results from Jira.</returns>
+        public static WorkItem UpdateBug(this RhinoTestCase testCase, WorkItem bug, VssConnection connection)
         {
             // setup
-            var title = GetBugTitle(testCase);
-            var body = GetBugBody(testCase);
-            var footer = GetBugFooter(testCase);
+            var testRun = testCase.GetTestRun(connection);
+            var testCaseResults = testRun.GetTestRunResults(connection);
+            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key, Compare));
+            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
+            var project = testCase.GetProjectName();
 
-            // get
-            return $"<div>{title}{body}{footer}</div>";
-        }
+            // update Bug
+            var bugDocument = testCase.GetBugDocument(Operation.Replace, comment);
+            bug = client.UpdateWorkItemAsync(bugDocument, bug.Id.ToInt(), bypassRules: true).GetAwaiter().GetResult();
+            bug = client.RemoveAttachments(bug);
 
-        // gets bug title HTML
-        private static string GetBugTitle(RhinoTestCase testCase)
-        {
-            // setup
-            const string DateFormat = "M/d/yyyy  hh:mm tt";
-            const string Html =
-                "<hr style=\"border-color:black;\">" +
-                "<table>" +
-                "   <tbody>" +
-                "       <tr>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">$(DateTime)</td>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px 2px 10px;\">Bug filed on &quot;$(Title)&quot;</td>" +
-                "       </tr>" +
-                "   </tbody>" +
-                "</table>" +
-                "<hr style=\"border-color:black;\">";
+            // upload new attachments
+            bug = CreateAttachmentsForBug(client, testCase, bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
-            // build
-            return Html
-                .Replace("$(DateTime)", DateTime.Now.ToString(DateFormat))
-                .Replace("$(Title)", testCase.Scenario);
-        }
-
-        // gets bug body (reproduce steps)
-        private static string GetBugBody(RhinoTestCase testCase)
-        {
-            // setup
-            const string Html =
-                "<table>" +
-                "   <tbody>" +
-                "       <tr>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">Step no.</td>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">Result</td>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">Title</td>" +
-                "       </tr>" +
-                "       $(Actions)" +
-                "   </tbody>" +
-                "</table>";
-
-            const string ActionHtml =
-                "<tr>" +
-                "   <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">$(ActionNumber).</td>" +
-                "   <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;color:$(ResultColor);\">$(ActionResult)</td>" +
-                "   <td style=\"vertical-align:top;padding:2px 7px;\">" +
-                "       <div>$(Action)</div>" +
-                "       <div style=\"padding-top:10px;\">Expected Result</div>" +
-                "       <div>$(ExpectedResult)</div>" +
-                "       <div style=\"padding-top:10px;\">Comment: $(Comment)</div>" +
-                "   </td>" +
-                "</tr>";
-
-            // build
-            var steps = testCase.Steps.ToArray();
-            var actions = new List<string>();
-            for (int i = 0; i < steps.Length; i++)
+            // link test results to bug
+            if (testCaseResult == default)
             {
-                var action = GetBugAction(steps[i], ActionHtml, i + 1);
-                actions.Add(action);
+                return bug;
             }
 
-            // get
-            return Html.Replace("$(Actions)", string.Concat(actions));
-        }
-
-        private static string GetBugAction(RhinoTestStep testStep, string bugHtml, int actionNumber)
-        {
-            // setup
-            var (color, phrase) = testStep.Actual ? ("green", "Passed") : ("red", "Failed");
-            var html = bugHtml
-                .Replace("$(ActionNumber)", $"{actionNumber}")
-                .Replace("$(ResultColor)", color)
-                .Replace("$(ActionResult)", phrase)
-                .Replace("$(Action)", testStep.Action);
-
-            // conditional
-            html = string.IsNullOrEmpty(testStep.Expected)
-                ? html
-                    .Replace("<div style=\"padding-top:10px;\">Expected Result</div>", string.Empty)
-                    .Replace("<div>$(ExpectedResult)</div>", string.Empty)
-                : html.Replace("$(ExpectedResult)", testStep.Expected);
+            // update
+            testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+            testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+            connection
+                .GetClient<TestManagementHttpClient>()
+                .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
+                .GetAwaiter()
+                .GetResult();
 
             // get
-            return string.IsNullOrEmpty(testStep.ReasonPhrase)
-                ? html.Replace("<div style=\"padding-top:10px;\">Comment: $(Comment)</div>", string.Empty)
-                : html.Replace("$(Comment)", testStep.ReasonPhrase);
+            return bug;
         }
 
-        // get bug footer
-        private static string GetBugFooter(RhinoTestCase testCase)
+        private static WorkItem CreateAttachmentsForBug(WorkItemTrackingHttpClient client, RhinoTestCase testCase, WorkItem bug)
         {
-            // setup
-            const string Html =
-                "<hr style=\"border-color:black;\">" +
-                "<table>" +
-                "   <tbody>" +
-                "       <tr>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px;font-weight:bold;\">Test Configuration:</td>" +
-                "           <td style=\"vertical-align:top;padding:2px 7px 2px 100px;\">$(Configuration)</td>" +
-                "       </tr>" +
-                "   </tbody>" +
-                "</table>" +
-                "<hr style=\"border-color:black;\">" +
-                "<table style=\"width:100%\">" +
-                "   <tbody>" +
-                "       <tr>" +
-                "           <td style=\"vertical-align:top; padding:2px 7px; font-weight:bold\">Data iteration:</td>" +
-                "           <td style=\"vertical-align:top; padding:2px 7px 2px 100px\">1</td>" +
-                "       </tr>" +
-                "   </tbody>" +
-                "</table>" +
-                "<hr style=\"border-color:black;\">" +
-                "$(DataTable)";
-
-            // setup
-            var isKey = testCase.Context.ContainsKey(AzureContextEntry.TestConfiguration);
-            var isConfiguration = isKey && testCase.Context[AzureContextEntry.TestConfiguration] is TestConfiguration;
-            var configuration = isConfiguration
-                ? (testCase.Context[AzureContextEntry.TestConfiguration] as TestConfiguration)?.Name ?? string.Empty
-                : string.Empty;
-
-            // get
-            return Html
-                .Replace("$(Configuration)", configuration)
-                .Replace("$(DataTable)", GetDataSource(testCase));
-        }
-
-        private static string GetDataSource(RhinoTestCase testCase)
-        {
-            // exit conditions
-            if (!testCase.DataSource.Any())
+            try
             {
-                return string.Empty;
-            }
+                // create attachments
+                var attachments = testCase.CreateAttachments(client);
 
-            // setup
-            const string Html =
-                "<table style=\"width:100%\">" +
-                "   <tbody>" +
-                "       <tr style=\"font-weight:bold\">$(Headers)</tr>" +
-                "       $(Data)" +
-                "   </tbody>" +
-                "</table>";
-            var keys = new List<string>();
-            var values = new List<string>();
-
-            // build: keys
-            foreach (var key in testCase.DataSource.First().Keys)
-            {
-                keys.Add("<td style=\"vertical-align:top; padding:2px 7px\">" + key + "</td>");
-            }
-            // build: data
-            foreach (var row in testCase.DataSource)
-            {
-                var rowHtml = new StringBuilder("<tr>");
-                foreach (var item in row)
+                // build
+                var operations = attachments.Select(i => new JsonPatchOperation
                 {
-                    rowHtml.Append("<td style=\"vertical-align:top; padding:2px 7px\">").Append(item.Value).Append("</td>");
-                }
-                rowHtml.Append("</tr>");
-                values.Add(rowHtml.ToString());
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "AttachedFile",
+                        url = i.Url
+                    }
+                });
+                var patchDocument = new JsonPatchDocument();
+                patchDocument.AddRange(operations);
+
+                // update
+                return client.UpdateWorkItemAsync(patchDocument, bug.Id.ToInt()).GetAwaiter().GetResult();
             }
-
-            // get
-            return Html
-                .Replace("$(Headers)", string.Concat(keys))
-                .Replace("$(Data)", string.Concat(values));
-        }
-
-        private static string GetPlatform(RhinoTestCase testCase)
-        {
-            return "";
+            catch (Exception e) when (e != null)
+            {
+                Trace.TraceError($"Create-Attachments -Test {testCase.Key} = {e.GetBaseException().Message}");
+            }
+            return bug;
         }
         #endregion
 
-        #region *** Rhino Configuration       ***
+        #region *** Configuration  ***
         /// <summary>
         /// Gets <see cref="VssCredentials"/> by RhinoConfiguration.ConnectorConfiguration.
         /// </summary>
@@ -744,86 +537,6 @@ namespace Rhino.Connectors.Azure.Extensions
             return isOs
                 ? CredentialsFactory.GetVssCredentials(new NetworkCredential(userName, password))
                 : CredentialsFactory.GetVssCredentials(userName, password);
-        }
-
-        /// <summary>
-        /// Gets a value from connector_azure:options dictionary under RhinoConfiguration.Capabilites.
-        /// </summary>
-        /// <typeparam name="T">The type of value to return.</typeparam>
-        /// <param name="configuration">RhinoConfiguration to get value from.</param>
-        /// <param name="capability">Capability name to get value from.</param>
-        /// <param name="defaultValue">The default value to return if the capability was not found.</param>
-        /// <returns>The value from the capability or default if not found.</returns>
-        public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
-        {
-            return DoGetAzureCapability(configuration, capability, defaultValue);
-        }
-
-        /// <summary>
-        /// Adds a value to connector_azure:options dictionary under RhinoConfiguration.Capabilites.
-        /// If the capability exists it will be overwritten.
-        /// </summary>
-        /// <param name="configuration">RhinoConfiguration to add value to.</param>
-        /// <param name="capability">Capability name to add value to.</param>
-        /// <param name="value">The value to add.</param>
-        public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
-        {
-            DoAddAzureCapability(configuration, capability, value);
-        }
-        #endregion
-
-        #region *** JSON Bug Document         ***
-        public static JsonPatchDocument AsBugDocument(this RhinoTestCase testCase)
-        {
-            throw new NotImplementedException();
-        }
-        #endregion
-
-        #region *** Utilities ***
-        private static T DoGetAzureCapability<T>(RhinoConfiguration configuration, string capability, T defaultValue)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
-
-            // get
-            return options.Get(capability, defaultValue);
-        }
-
-        private static void DoAddAzureCapability(RhinoConfiguration configuration, string capability, object value)
-        {
-            // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
-
-            // put
-            options[capability] = value;
-            configuration.Capabilities[optionsKey] = options;
-        }
-
-        private static string GetActionPath(RhinoTestStep testStep, string defaultValue)
-        {
-            return testStep.Context.ContainsKey(AzureContextEntry.SharedStepActionPath)
-                ? testStep.Context.Get(AzureContextEntry.SharedStepActionPath, defaultValue)
-                : testStep.Context.Get(AzureContextEntry.ActionPath, defaultValue);
-        }
-
-        private static string GetStepIdentifier(RhinoTestStep testStep, string defaultValue)
-        {
-            return testStep.Context.ContainsKey(AzureContextEntry.SharedStepIdentifier)
-                ? testStep.Context.Get(AzureContextEntry.SharedStepIdentifier, defaultValue)
-                : testStep.Context.Get(AzureContextEntry.StepRuntime, defaultValue);
-        }
-
-        private static int GetSharedStepRevision(RhinoTestStep testStep)
-        {
-            // setup
-            var item = testStep.Context.ContainsKey(AzureContextEntry.SharedStep)
-                ? testStep.Context.Get(AzureContextEntry.SharedStep, new WorkItem())
-                : new WorkItem();
-
-            // get
-            return item.Rev == null || item.Rev == 0 ? 1 : item.Rev.ToInt();
         }
         #endregion
     }

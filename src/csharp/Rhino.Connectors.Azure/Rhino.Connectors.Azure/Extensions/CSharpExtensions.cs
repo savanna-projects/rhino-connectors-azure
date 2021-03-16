@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text.Json;
+using System.Web;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -63,12 +64,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// </summary>
         /// <param name="str"><see cref="string"/> HTML to normalize.</param>
         /// <returns>Normalized <see cref="string"/>.</returns>
-        public static string DecodeHtml(this string str) => str
-            .Replace("&lt;", "<")
-            .Replace("&gt;", ">")
-            .Replace("&amp;", "")
-            .Replace("nbsp;", "")
-            .Replace("<BR/>", "\n");
+        public static string DecodeHtml(this string str) => HttpUtility.HtmlDecode(str.Replace("<BR/>", "\n"));
 
         /// <summary>
         /// UTC - ISO 8601 (2012-03-19T07:22Z) format.
@@ -102,6 +98,14 @@ namespace Rhino.Connectors.Azure.Extensions
                 kind: dateTime.Kind);
         }
 
+        /// <summary>
+        /// Gets a value if key exists or default value if not.
+        /// </summary>
+        /// <typeparam name="T">The <see cref="Type"/> of the value.</typeparam>
+        /// <param name="dictionary">The <see cref="IDictionary{TKey, TValue}"/> to get value from.</param>
+        /// <param name="key">The key to get value by.</param>
+        /// <param name="defaultValue">The default value to return.</param>
+        /// <returns>A value or default value if value was not found.</returns>
         public static T Get<T>(this IDictionary<string, object> dictionary, string key, T defaultValue)
         {
             // exit conditions
@@ -133,6 +137,25 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 return defaultValue;
             }
+        }
+
+        /// <summary>
+        /// Sets a filed in the dictionary if the value to set is not null or empty.
+        /// </summary>
+        /// <typeparam name="T">The <see cref="Type"/> of the value.</typeparam>
+        /// <param name="dictionary">The <see cref="IDictionary{TKey, TValue}"/> to set value into.</param>
+        /// <param name="key">The key to set value by.</param>
+        /// <param name="value">The default value to set.</param>
+        public static void SetWhenNotNullOrEmpty<T>(this IDictionary<string, object> dictionary, string key, T value)
+        {
+            // exit conditions
+            if (value == null || string.IsNullOrEmpty($"{value}"))
+            {
+                return;
+            }
+
+            // add
+            dictionary[key] = value;
         }
     }
 }
