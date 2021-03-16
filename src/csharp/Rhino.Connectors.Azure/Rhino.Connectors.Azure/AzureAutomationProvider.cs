@@ -105,7 +105,7 @@ namespace Rhino.Connectors.Azure
             var credentials = configuration.GetVssCredentials();
             connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
             project = configuration.ConnectorConfiguration.Project;
-            bugsManager = new AzureBugsManager(connection, project);
+            bugsManager = new AzureBugsManager(connection);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
             options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
@@ -1027,7 +1027,8 @@ namespace Rhino.Connectors.Azure
         /// <returns>A collection of updated bugs.</returns>
         public override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
-            return bugsManager.OnCloseBugs(testCase, "Done", string.Empty);
+            // setup
+            return bugsManager.OnCloseBugs(testCase, "Closed", "Fixed and verified");
         }
 
         /// <summary>
@@ -1037,7 +1038,11 @@ namespace Rhino.Connectors.Azure
         /// <returns>The closed bug.</returns>
         public override string OnCloseBug(RhinoTestCase testCase)
         {
-            return bugsManager.OnCloseBug(testCase, "Done", string.Empty);
+            // setup
+            var closedBugs = bugsManager.OnCloseBugs(testCase, "Closed", "Fixed and verified");
+
+            // get
+            return JsonConvert.SerializeObject(closedBugs);
         }
         #endregion
     }

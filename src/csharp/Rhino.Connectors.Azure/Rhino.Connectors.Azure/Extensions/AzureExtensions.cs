@@ -721,6 +721,70 @@ namespace Rhino.Connectors.Azure.Extensions
         #endregion
 
         #region *** Work Item Client ***
+        public static WorkItem AddComment(this WorkItemTrackingHttpClient client, WorkItem item, string comment)
+        {
+            // setup
+            var operation = new JsonPatchOperation
+            {
+                Operation = Operation.Add,
+                Path = "/fields/System.History",
+                Value = comment
+            };
+            var document = new JsonPatchDocument { operation };
+
+            // add
+            try
+            {
+                return client.UpdateWorkItemAsync(document, item.Id.ToInt()).GetAwaiter().GetResult();
+            }
+            catch (Exception e) when (e != null)
+            {
+                // ignore exceptions
+            }
+            return item;
+        }
+
+        /// <summary>
+        /// Removes all related attachments from the <see cref="WorkItem"/>.
+        /// </summary>
+        /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> to use.</param>
+        /// <param name="item">The <see cref="WorkItem"/> to remove from.</param>
+        /// <returns>The updated <see cref="WorkItem"/>.</returns>
+        public static WorkItem RemoveAttachments(this WorkItemTrackingHttpClient client, WorkItem item)
+        {
+            // setup
+            var relations = item.Relations.ToList();
+
+            // find
+            var document = new JsonPatchDocument();
+            for (int i = 0; i < relations.Count; i++)
+            {
+                if (!relations[i].Rel.Equals("AttachedFile"))
+                {
+                    continue;
+                }
+                document.Add(new JsonPatchOperation
+                {
+                    Operation = Operation.Remove,
+                    Path = $"/relations/{i}"
+                });
+            }
+
+            // remove
+            try
+            {
+                return client
+                    .UpdateWorkItemAsync(document, item.Id.ToInt(), bypassRules: true)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception e) when (e != null)
+            {
+                // ignore exceptions
+            }
+            return item;
+        }
+
         /// <summary>
         /// Gets a collection of bug <see cref="WorkItem"/>.
         /// </summary>

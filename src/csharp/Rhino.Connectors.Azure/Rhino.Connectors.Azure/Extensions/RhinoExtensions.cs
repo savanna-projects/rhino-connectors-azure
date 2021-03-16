@@ -24,6 +24,7 @@ using Rhino.Connectors.Azure.Framework;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -413,13 +414,13 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             var bug = client.CreateWorkItemAsync(document, project, "Bug").GetAwaiter().GetResult();
-            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
             // post create
-            CreateAttachmentsForBug(client, testCase);
+            bug = CreateAttachmentsForBug(client, testCase, bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
             // link test results to bug
-            if(testCaseResult != default)
+            if (testCaseResult != default)
             {
                 testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
                 testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
@@ -435,9 +436,8 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return bug;
-        }        
+        }
 
-        // TODO: handle removing/adding new attachments
         /// <summary>
         /// Creates a bug based on this RhinoTestCase.
         /// </summary>
@@ -457,7 +457,11 @@ namespace Rhino.Connectors.Azure.Extensions
             // update Bug
             var bugDocument = testCase.GetBugDocument(Operation.Replace, comment);
             bug = client.UpdateWorkItemAsync(bugDocument, bug.Id.ToInt(), bypassRules: true).GetAwaiter().GetResult();
-            testCase.Context["openBug"] = bug;
+            bug = client.RemoveAttachments(bug);
+
+            // upload new attachments
+            bug = CreateAttachmentsForBug(client, testCase, bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
             // link test results to bug
             if (testCaseResult == default)
@@ -478,40 +482,35 @@ namespace Rhino.Connectors.Azure.Extensions
             return bug;
         }
 
-        private static void CreateAttachmentsForBug(WorkItemTrackingHttpClient client, RhinoTestCase testCase)
+        private static WorkItem CreateAttachmentsForBug(WorkItemTrackingHttpClient client, RhinoTestCase testCase, WorkItem bug)
         {
-            // create attachments
-            var attachments = testCase.CreateAttachments(client);
-
-            // build
-            var operations = attachments.Select(i => new JsonPatchOperation
+            try
             {
-                Operation = Operation.Add,
-                Path = "/relations/-",
-                Value = new
+                // create attachments
+                var attachments = testCase.CreateAttachments(client);
+
+                // build
+                var operations = attachments.Select(i => new JsonPatchOperation
                 {
-                    rel = "AttachedFile",
-                    url = i.Url
-                }
-            });
-            var patchDocument = new JsonPatchDocument();
-            patchDocument.AddRange(operations);
+                    Operation = Operation.Add,
+                    Path = "/relations/-",
+                    Value = new
+                    {
+                        rel = "AttachedFile",
+                        url = i.Url
+                    }
+                });
+                var patchDocument = new JsonPatchDocument();
+                patchDocument.AddRange(operations);
 
-            // update
-            var bug = JsonConvert.DeserializeObject<WorkItem>($"{testCase.Context[ContextEntry.BugOpened]}");
-            client.UpdateWorkItemAsync(patchDocument, bug.Id.ToInt()).GetAwaiter().GetResult();
-        }
-
-        /// <summary>
-        /// Close a bug based on this RhinoTestCase.
-        /// </summary>
-        /// <param name="testCase">RhinoTestCase by which to close a bug.</param>
-        /// <param name="id">The <see cref="WorkItem.Id"/> of the bug.</param>
-        /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
-        /// <returns><see cref="true"/> if close was successful, <see cref="false"/> if not.</returns>
-        public static bool CloseBug(this RhinoTestCase testCase, string id, VssConnection connection)
-        {
-            throw new NotImplementedException();
+                // update
+                return client.UpdateWorkItemAsync(patchDocument, bug.Id.ToInt()).GetAwaiter().GetResult();
+            }
+            catch (Exception e) when (e != null)
+            {
+                Trace.TraceError($"Create-Attachments -Test {testCase.Key} = {e.GetBaseException().Message}");
+            }
+            return bug;
         }
         #endregion
 
