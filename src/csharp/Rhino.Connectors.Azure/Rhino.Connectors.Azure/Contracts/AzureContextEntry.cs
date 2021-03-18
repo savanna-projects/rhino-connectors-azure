@@ -85,7 +85,7 @@ namespace Rhino.Connectors.Azure.Contracts
         /// <summary>
         /// Context entry to hold test action (step) id. This the ID given to the action by TCM.
         /// </summary>
-        public const string StepRuntime = "azrRuntimeid";
+        public const string StepRuntime = "azrRuntimeId";
 
         /// <summary>
         /// Context entry to hold Azure Test Configuration.
