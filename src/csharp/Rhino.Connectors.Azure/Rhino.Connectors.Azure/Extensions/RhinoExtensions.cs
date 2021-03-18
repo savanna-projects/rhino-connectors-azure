@@ -3,6 +3,8 @@
  * 
  * RESOURCES
  */
+using Gravity.Extensions;
+
 using HtmlAgilityPack;
 
 using Microsoft.TeamFoundation.TestManagement.WebApi;
@@ -53,7 +55,6 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 Id = testCase.Iteration + 1,
                 StartedDate = DateTime.Now.AzureNow(addMilliseconds: true),
-                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: true),
                 Comment = "Automatically Created by Rhino Engine."
             };
             iteration.DurationInMs = (iteration.CompletedDate - iteration.StartedDate).TotalMilliseconds;
@@ -101,7 +102,7 @@ namespace Rhino.Connectors.Azure.Extensions
             }
 
             // get
-            return actionResults.OrderBy(i => i.ActionPath);
+            return RepairSharedSteps(actionResults);
         }
 
         private static TestActionResultModel GetSharedActionResultModel(RhinoTestStep testStep, int iteration, bool setOutcome)
@@ -112,11 +113,12 @@ namespace Rhino.Connectors.Azure.Extensions
             // build
             var actionResult = new TestActionResultModel
             {
-                ActionPath = testStep.Context.Get(AzureContextEntry.SharedStepPath, "-1"),
+                ActionPath = testStep.GetActionPath(defaultValue: "-1"),
+                StepIdentifier = testStep.GetActionIdentifier("-1"),
                 IterationId = iteration,
                 SharedStepModel = new SharedStepModel { Id = id, Revision = testStep.GetSharedStepsRevision() },
                 StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
-                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false)
+                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false),
             };
 
             // outcome
@@ -135,16 +137,13 @@ namespace Rhino.Connectors.Azure.Extensions
 
         private static TestActionResultModel GetActionResultModel(RhinoTestStep testStep, int iteration, bool setOutcome)
         {
-            // setup
-            var actionPath = testStep.GetActionPath(defaultValue: $"{iteration}");
-
             // build
             var actionResult = new TestActionResultModel
             {
-                ActionPath = actionPath,
+                ActionPath = testStep.GetActionPath(defaultValue: "-1"),
+                StepIdentifier = testStep.GetActionIdentifier("-1"),
                 IterationId = iteration,
-                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
-                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false)
+                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false)
             };
 
             // outcome
@@ -222,6 +221,31 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return isModel && testAction.SharedStepModel.Id == id;
+        }
+
+        // repair
+        private static IEnumerable<TestActionResultModel> RepairSharedSteps(IEnumerable<TestActionResultModel> actionResults)
+        {
+            // setup
+            var notShared = actionResults.Where(i => i.ActionPath.Length == 8);
+            var sharedActions = actionResults.FirstOrDefault(i => i.SharedStepModel != null);
+
+            // exit conditions
+            if(sharedActions == default)
+            {
+                return actionResults;
+            }
+
+            // get
+            var steps = actionResults.Where(i => i.ActionPath.StartsWith(sharedActions.ActionPath.Substring(0, 8)));
+            var step = steps.FirstOrDefault(i => i.SharedStepModel != null);
+
+            // build
+            step.ActionPath = step.ActionPath.Substring(0, 8);
+            step.StepIdentifier = step.StepIdentifier.Split(";")[0];
+
+            // get
+            return notShared.Concat(steps.Where(i => i.SharedStepModel == null));
         }
         #endregion
 

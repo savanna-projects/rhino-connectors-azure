@@ -915,11 +915,11 @@ namespace Rhino.Connectors.Azure.Extensions
             stepsDocument.LoadHtml(shared.Fields.Get("Microsoft.VSTS.TCM.Steps", string.Empty).DecodeHtml());
 
             // setup > enqueue next
-            var sharedStepAction = stepOut.Node.GetAttributeValue("id", "0");
+            var sharedStepAction = int.Parse(stepOut.Node.GetAttributeValue("id", "0")).ToString("x");
             var range = new List<(IDictionary<string, object>, HtmlNode)>();
             foreach (var node in stepsDocument.DocumentNode.SelectNodes(".//steps/step"))
             {
-                var runtime = node.GetAttributeValue("id", "0");
+                var runtime = int.Parse(node.GetAttributeValue("id", "0")).ToString("x");
                 var path =
                     new string('0', 8 - sharedStepAction.Length) + sharedStepAction +
                     new string('0', 8 - runtime.Length) + runtime;
@@ -959,11 +959,13 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // setup
             var id = step.Node.GetAttributeValue("id", "-1");
+            _ = int.TryParse(id, out int idOut);
+            var idHex = idOut.ToString("x");
 
             // context
             rhinoStep.Context[AzureContextEntry.StepRuntime] = id;
             rhinoStep.Context[AzureContextEntry.Step] = step;
-            rhinoStep.Context[AzureContextEntry.ActionPath] = new string('0', 8 - id.Length) + id;
+            rhinoStep.Context[AzureContextEntry.ActionPath] = new string('0', 8 - idHex.Length) + idHex;
 
             foreach (var item in step.Context)
             {
@@ -1108,6 +1110,11 @@ namespace Rhino.Connectors.Azure.Extensions
                 .GetAwaiter()
                 .GetResult()
                 .Relations;
+
+            if (relations?.Any() != true)
+            {
+                return Array.Empty<WorkItem>();
+            }
 
             // filter related items by relevant relation > extract id
             var ids = relations

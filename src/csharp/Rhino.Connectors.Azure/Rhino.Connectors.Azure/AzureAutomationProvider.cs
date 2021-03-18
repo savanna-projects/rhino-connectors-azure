@@ -334,7 +334,8 @@ namespace Rhino.Connectors.Azure
                     .GetWorkItemsAsync(ids, fields: null, asOf: null, expand: WorkItemExpand.All)
                     .GetAwaiter()
                     .GetResult()
-                    .Where(i => $"{i.Fields[TypeField]}".Equals(TestCase, Compare));
+                    .Where(i => $"{i.Fields[TypeField]}".Equals(TestCase, Compare))
+                    .ToArray();
             }
             catch (Exception e)
             {
@@ -507,7 +508,7 @@ namespace Rhino.Connectors.Azure
 
         private void AddConfigurationToTestContext(Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration configuration)
         {
-            if(configuration == null)
+            if (configuration == null)
             {
                 return;
             }
@@ -551,7 +552,6 @@ namespace Rhino.Connectors.Azure
                     testCaseResult.IterationDetails.AddRange(iterationDetails);
                 }
 
-                // 4. Update
                 testManagement
                     .UpdateTestResultsAsync(testCaseResults.ToArray(), project, azureTestRun.Id)
                     .GetAwaiter()
@@ -606,10 +606,7 @@ namespace Rhino.Connectors.Azure
                 var points = GetAllTestPoints().Select(i => i.Id).ToArray();
 
                 // get
-                return new RunCreateModel(
-                    name: TestRun.Title,
-                    pointIds: points,
-                    plan: new ShallowReference(id: $"{plan}"));
+                return new RunCreateModel(name: TestRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
             }
             catch (Exception e) when (e != null)
             {
@@ -663,7 +660,7 @@ namespace Rhino.Connectors.Azure
                          .GetPointAsync(project, testPlan, testSuite, testPoint.Id)
                          .GetAwaiter()
                          .GetResult();
-                    if(!isTestSuiteProvided || testSuiteOption == testSuite)
+                    if (!isTestSuiteProvided || testSuiteOption == testSuite)
                     {
                         testPointsResults.Add(point);
                     }
@@ -720,7 +717,7 @@ namespace Rhino.Connectors.Azure
             {
                 return;
             }
-            if(isRunResultsOk && !isRunStateOk)
+            if (isRunResultsOk && !isRunStateOk)
             {
                 testManagement.UpdateTestRunAsync(model, project, azureTestRun.Id).GetAwaiter().GetResult();
                 return;
