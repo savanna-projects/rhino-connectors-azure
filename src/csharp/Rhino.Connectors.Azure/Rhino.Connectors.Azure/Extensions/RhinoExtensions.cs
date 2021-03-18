@@ -227,25 +227,32 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IEnumerable<TestActionResultModel> RepairSharedSteps(IEnumerable<TestActionResultModel> actionResults)
         {
             // setup
-            var notShared = actionResults.Where(i => i.ActionPath.Length == 8);
-            var sharedActions = actionResults.FirstOrDefault(i => i.SharedStepModel != null);
+            var all = actionResults.Where(i => i.ActionPath.Length == 8);
+            var sharedActions = actionResults.Where(i => i.SharedStepModel != null);
 
             // exit conditions
-            if(sharedActions == default)
+            if(!sharedActions.Any())
             {
                 return actionResults;
             }
 
-            // get
-            var steps = actionResults.Where(i => i.ActionPath.StartsWith(sharedActions.ActionPath.Substring(0, 8)));
-            var step = steps.FirstOrDefault(i => i.SharedStepModel != null);
-
             // build
-            step.ActionPath = step.ActionPath.Substring(0, 8);
-            step.StepIdentifier = step.StepIdentifier.Split(";")[0];
+            foreach (var sharedAction in sharedActions)
+            {
+                // get
+                var steps = actionResults.Where(i => i.ActionPath.StartsWith(sharedAction.ActionPath.Substring(0, 8)));
+                var step = steps.FirstOrDefault(i => i.SharedStepModel != null);
+
+                // build
+                step.ActionPath = step.ActionPath.Substring(0, 8);
+                step.StepIdentifier = step.StepIdentifier.Split(";")[0];
+
+                // get
+                all = all.Concat(steps.Where(i => i.SharedStepModel == null));
+            }
 
             // get
-            return notShared.Concat(steps.Where(i => i.SharedStepModel == null));
+            return all;
         }
         #endregion
 
