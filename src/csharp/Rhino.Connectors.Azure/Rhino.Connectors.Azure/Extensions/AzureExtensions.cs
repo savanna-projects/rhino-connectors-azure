@@ -953,8 +953,8 @@ namespace Rhino.Connectors.Azure.Extensions
             // build
             var rhinoStep = new RhinoTestStep
             {
-                Action = onStep[0].InnerText.Trim(),
-                Expected = onStep[1].InnerText.Trim()
+                Action = onStep[0].InnerText.DecodeHtml().Trim(),
+                Expected = onStep[1].InnerText.DecodeHtml().Replace(pattern: "(?i)(verify|assert)", replacement: "\nverify").Trim()
             };
 
             // setup

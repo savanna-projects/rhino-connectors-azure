@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Web;
 
 namespace Rhino.Connectors.Azure.Extensions
@@ -156,6 +157,19 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // add
             dictionary[key] = value;
+        }
+
+        /// <summary>
+        /// In a specified input string, replaces all strings that match a regular expression
+        /// pattern with a specified replacement string.
+        /// </summary>
+        /// <param name="input">The string to search for a match.</param>
+        /// <param name="pattern">The regular expression pattern to match.</param>
+        /// <param name="replacement">The replacement string.</param>
+        /// <returns>A new string that is identical to the input string, except that the replacement string takes the place of each matched string.</returns>
+        public static string Replace(this string input, string pattern, string replacement)
+        {
+            return Regex.Replace(input, pattern, replacement);
         }
     }
 }
