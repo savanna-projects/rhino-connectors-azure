@@ -54,10 +54,9 @@ namespace Rhino.Connectors.Azure.Extensions
             var iteration = new TestIterationDetailsModel
             {
                 Id = testCase.Iteration + 1,
-                StartedDate = DateTime.Now.AzureNow(addMilliseconds: true),
+                StartedDate = DateTime.Now.ToAzureDate(addMilliseconds: true),
                 Comment = "Automatically Created by Rhino Engine."
             };
-            iteration.DurationInMs = (iteration.CompletedDate - iteration.StartedDate).TotalMilliseconds;
 
             // build
             iteration.ActionResults = GetActionResults(testCase, setOutcome).ToList();
@@ -117,15 +116,15 @@ namespace Rhino.Connectors.Azure.Extensions
                 StepIdentifier = testStep.GetActionIdentifier("-1"),
                 IterationId = iteration,
                 SharedStepModel = new SharedStepModel { Id = id, Revision = testStep.GetSharedStepsRevision() },
-                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false),
-                CompletedDate = DateTime.Now.AddMinutes(5).AzureNow(addMilliseconds: false),
+                StartedDate = DateTime.Now.ToAzureDate(addMilliseconds: false),
+                CompletedDate = DateTime.Now.AddMinutes(5).ToAzureDate(addMilliseconds: false),
             };
 
             // outcome
             if (setOutcome)
             {
                 actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
-                actionResult.CompletedDate = DateTime.Now.AzureNow(addMilliseconds: false);
+                actionResult.CompletedDate = DateTime.Now.ToAzureDate(addMilliseconds: false);
             }
             actionResult.ErrorMessage = actionResult.Outcome == nameof(TestOutcome.Failed)
                 ? testStep.ReasonPhrase
@@ -143,14 +142,15 @@ namespace Rhino.Connectors.Azure.Extensions
                 ActionPath = testStep.GetActionPath(defaultValue: "-1"),
                 StepIdentifier = testStep.GetActionIdentifier("-1"),
                 IterationId = iteration,
-                StartedDate = DateTime.Now.AzureNow(addMilliseconds: false)
+                StartedDate = DateTime.UtcNow.ToAzureDate(addMilliseconds: false)
             };
 
             // outcome
             if (setOutcome)
             {
                 actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
-                actionResult.CompletedDate = DateTime.Now.AzureNow(addMilliseconds: false);
+                actionResult.CompletedDate = DateTime.UtcNow.ToAzureDate(addMilliseconds: false);
+                actionResult.DurationInMs = testStep.RunTime.TotalMilliseconds;
             }
 
             // get
@@ -433,8 +433,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var project = testCase.GetProjectName();
             var testRun = testCase.GetTestRun(connection);
-            var testCaseResults = testRun.GetTestRunResults(connection);
-            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key, Compare));
+            var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key, Compare));
 
             var document = testCase.GetBugDocument(
                 operation: Operation.Add,
@@ -451,10 +450,14 @@ namespace Rhino.Connectors.Azure.Extensions
             testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
             // link test results to bug
-            if (testCaseResult != default)
+            if (testCaseResults.Any())
             {
-                testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
-                testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+                foreach (var testCaseResult in testCaseResults)
+                {
+                    testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+                    testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+                }
+
                 connection
                     .GetClient<TestManagementHttpClient>()
                     .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
@@ -479,8 +482,7 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
-            var testCaseResults = testRun.GetTestRunResults(connection);
-            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key, Compare));
+            var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key, Compare));
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
             var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
             var project = testCase.GetProjectName();
@@ -495,14 +497,17 @@ namespace Rhino.Connectors.Azure.Extensions
             testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
 
             // link test results to bug
-            if (testCaseResult == default)
+            if (!testCaseResults.Any())
             {
                 return bug;
             }
 
             // update
-            testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
-            testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+            foreach (var testCaseResult in testCaseResults)
+            {
+                testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+                testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
+            }
             connection
                 .GetClient<TestManagementHttpClient>()
                 .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)

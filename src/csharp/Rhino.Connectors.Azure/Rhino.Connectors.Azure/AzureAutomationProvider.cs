@@ -777,7 +777,7 @@ namespace Rhino.Connectors.Azure
                 .OrderByDescending(i => i.End)
                 .First()
                 .End
-                .AzureNow(true);
+                .ToAzureDate(true);
 
             // get
             return result;
@@ -793,47 +793,50 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
-            var result = GetTestCaseResult(testCase);
+            var results = GetTestCaseResult(testCase);
 
             // exit conditions
-            if (result == default)
+            if (!results.Any())
             {
+                logger?.Debug($"Update-TestResults -Test {testCase.Key} = NotFound");
                 return;
             }
 
-            // setup
-            result.Outcome = outcome;
-
-            // create
-            var iteration = testCase.ToTestIterationDetails(setOutcome: true);
-            iteration.StartedDate = testCase.Start.AzureNow(addMilliseconds: true);
-
-            // status
-            if (outcome == nameof(TestOutcome.Passed) || outcome == nameof(TestOutcome.Failed))
+            // build
+            var onResults = new List<TestCaseResult>();
+            foreach (var result in results)
             {
-                iteration.CompletedDate = testCase.End.AzureNow(addMilliseconds: true);
-                if (result.IterationDetails.Count == 1)
+                // setup
+                result.Outcome = outcome;
+
+                // create
+                var iteration = testCase.ToTestIterationDetails(setOutcome: true);
+
+                // status
+                if (outcome == nameof(TestOutcome.Passed) || outcome == nameof(TestOutcome.Failed))
                 {
-                    result.State = nameof(TestRunState.Completed);
+                    SetIterationPassOrFail(testCase, result, iteration);
                 }
 
-                var itemToRemove = result.IterationDetails.Find(i => i.Id == testCase.Iteration + 1);
-                if (itemToRemove != default)
-                {
-                    result.IterationDetails.Remove(itemToRemove);
-                }
+                // timespan
+                result.StartedDate = testCase.Start.ToAzureDate(addMilliseconds: true);
+                result.CompletedDate = testCase.End.ToAzureDate(addMilliseconds: true);
+                iteration.StartedDate = testCase.Start.ToAzureDate(addMilliseconds: true);
+                iteration.CompletedDate = testCase.End.ToAzureDate(addMilliseconds: true);
 
-                result.IterationDetails.Add(iteration);
+                // set
+                onResults.Add(result);
             }
 
             // update
             testManagement
-                .UpdateTestResultsAsync(new[] { result }, project, int.Parse(testCase.TestRunKey))
+                .UpdateTestResultsAsync(onResults.ToArray(), project, int.Parse(testCase.TestRunKey))
                 .GetAwaiter()
                 .GetResult();
+            logger?.Debug($"Update-TestResults -Test {testCase.Key} = (Ok, {onResults.Count})");
         }
 
-        private TestCaseResult GetTestCaseResult(RhinoTestCase testCase)
+        private IEnumerable<TestCaseResult> GetTestCaseResult(RhinoTestCase testCase)
         {
             // setup
             _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
@@ -856,9 +859,29 @@ namespace Rhino.Connectors.Azure
 
             // get iterations results
             return testManagement
-                .GetTestResultByIdAsync(project, runId: runIdOut, testCaseResultId: result.Id, detailsToInclude: ResultDetails.Iterations)
+                .GetTestResultsAsync(project, testCase.TestRunKey.ToInt(), ResultDetails.Iterations)
                 .GetAwaiter()
-                .GetResult();
+                .GetResult()
+                .Where(i => i.TestCase.Id.Equals(testCase.Key));
+        }
+
+        private static void SetIterationPassOrFail(RhinoTestCase testCase, TestCaseResult result, TestIterationDetailsModel iteration)
+        {
+            // single iteration
+            if (result.IterationDetails.Count == 1)
+            {
+                result.State = nameof(TestRunState.Completed);
+            }
+
+            // cleanup
+            var itemToRemove = result.IterationDetails.Find(i => i.Id == testCase.Iteration + 1);
+            if (itemToRemove != default)
+            {
+                result.IterationDetails.Remove(itemToRemove);
+            }
+
+            // update
+            result.IterationDetails.Add(iteration);
         }
 
         /// <summary>
@@ -883,29 +906,20 @@ namespace Rhino.Connectors.Azure
 
             // setup
             _ = int.TryParse(TestRun.Key, out int runId);
-            var testCaseResult = DoGetTestCaseResult(testCase);
-            testCaseResult = testManagement
-                .GetTestResultByIdAsync(project, runId, testCaseResult.Id, ResultDetails.Iterations)
+            var testCaseResults = testManagement
+                .GetTestResultsAsync(project, runId, ResultDetails.Iterations)
                 .GetAwaiter()
-                .GetResult();
+                .GetResult()
+                .Where(i => i.TestCase.Id.Equals(testCase.Key));
 
             // setup
             var attachments = testCase.Steps.SelectMany(i => i.GetAttachments()).ToList();
 
             // post
-            UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
-        }
-
-        private TestCaseResult DoGetTestCaseResult(RhinoTestCase testCase)
-        {
-            // setup
-            _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
-
-            // get test results
-            return testManagement.GetTestResultsAsync(project, runIdOut)
-                .GetAwaiter()
-                .GetResult()
-                .Find(i => i.TestCase.Id.Equals(testCase.Key));
+            foreach (var testCaseResult in testCaseResults)
+            {
+                UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
+            }
         }
 
         private void UploadAttachments(IEnumerable<TestAttachmentRequestModel> attachments, int runId, int resultId, int iteration)

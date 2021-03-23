@@ -72,7 +72,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// </summary>
         /// <param name="dateTime"><see cref="DateTime"/> to convert.</param>
         /// <returns>ISO 8601 formatter.</returns>
-        public static DateTime AzureNow(this DateTime dateTime, bool addMilliseconds)
+        public static DateTime ToAzureDate(this DateTime dateTime, bool addMilliseconds)
         {
             // with milliseconds
             if (addMilliseconds)

@@ -159,8 +159,7 @@ namespace Rhino.Connectors.Azure.Framework
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
-            var testCaseResults = testRun.GetTestRunResults(connection);
-            var testCaseResult = testCaseResults.FirstOrDefault(i => i.TestCase.Id.Equals(testCase.Key));
+            var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
             var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
             var project = testCase.GetProjectName();
 
@@ -197,14 +196,17 @@ namespace Rhino.Connectors.Azure.Framework
                 : Array.Empty<string>();
 
             // add test results
-            if (testCaseResult == default)
+            if (!testCaseResults.Any())
             {
                 return bugsClosed;
             }
 
             // update
-            testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
-            testCaseResult.AssociatedBugs.AddRange(openBugs.Select(i => i.GetTestReference()));
+            foreach (var testCaseResult in testCaseResults)
+            {
+                testCaseResult.AssociatedBugs ??= new List<ShallowReference>();
+                testCaseResult.AssociatedBugs.AddRange(openBugs.Select(i => i.GetTestReference()));
+            }
             connection
                 .GetClient<TestManagementHttpClient>()
                 .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
