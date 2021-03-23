@@ -8,6 +8,11 @@
 
 Rhino API connectors for using with [Azure DevOps or Team Foundation Server](https://azure.microsoft.com/en-us/services/devops/) product.
 
+## Azure DevOps/TFS Versions
+* Minimum version for E2E runs, without tests results - TFS 2017 Update 3, *v15.117.27414.0*.
+* Minimum version for E2E runs, with tests results - TFS 2018.5 - might report partial results.
+* Recommended version for E2E runs, with all features - DevOps Server/Cloud Latest Version.
+
 ## Known Issues
 * Team Foundation Server <= 2018 does not support REST API for getting test cases by _**Test Suite**_ or _**Test Plan**_. You can use _**Test Case ID**_ or query (ID or literal).
 * Team Foundation Server <= 2018 does not support [TestPlanHttpClient](https://docs.microsoft.com/en-us/dotnet/api/microsoft.visualstudio.services.testmanagement.testplanning.webapi.testplanhttpclient?view=azure-devops-dotnet-preview). The behavior is mitigated and replaced whenever possible, but some TestPlan/TestSuite functionalities will not be supported.
