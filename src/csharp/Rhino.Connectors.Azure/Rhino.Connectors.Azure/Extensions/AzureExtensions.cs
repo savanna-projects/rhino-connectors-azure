@@ -1037,6 +1037,12 @@ namespace Rhino.Connectors.Azure.Extensions
 
         private static IEnumerable<TestCaseResult> DoGetTestRunResults(TestRun testRun, TestManagementHttpClient client)
         {
+            // exit conditions
+            if(testRun == null)
+            {
+                return Array.Empty<TestCaseResult>();
+            }
+
             // setup
             const int BatchSize = 1000;
             var gropus = testRun.TotalTests > BatchSize ? (BatchSize / testRun.TotalTests) + 1 : 1;
@@ -1078,27 +1084,34 @@ namespace Rhino.Connectors.Azure.Extensions
         // get all open bugs for a test case & set context
         private static IEnumerable<WorkItem> DoGetOpenBugs(RhinoTestCase testCase, WorkItemTrackingHttpClient client)
         {
-            // setup
-            var closeStatus = new[] { "Closed", "Resolved" };
-            var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
-            var project = DoGetProjectName(testCase);
+            try
+            {
+                // setup
+                var closeStatus = new[] { "Closed", "Resolved" };
+                var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
+                var project = DoGetProjectName(testCase);
 
-            // exit conditions
-            var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
-            if (!openBugs.Any())
+                // exit conditions
+                var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
+                if (!openBugs.Any())
+                {
+                    return Array.Empty<WorkItem>();
+                }
+
+                // build
+                openBugs = client
+                    .GetWorkItemsAsync(project, openBugs.Select(i => i.Id.ToInt()), null, expand: WorkItemExpand.All)
+                    .GetAwaiter()
+                    .GetResult();
+                testCase.Context[AzureContextEntry.OpenBugs] = openBugs;
+
+                // get
+                return openBugs;
+            }
+            catch (Exception e) when (e != null)
             {
                 return Array.Empty<WorkItem>();
             }
-
-            // build
-            openBugs = client
-                .GetWorkItemsAsync(project, openBugs.Select(i => i.Id.ToInt()), null, expand: WorkItemExpand.All)
-                .GetAwaiter()
-                .GetResult();
-            testCase.Context[AzureContextEntry.OpenBugs] = openBugs;
-
-            // get
-            return openBugs;
         }
 
         // get all bugs for a test case

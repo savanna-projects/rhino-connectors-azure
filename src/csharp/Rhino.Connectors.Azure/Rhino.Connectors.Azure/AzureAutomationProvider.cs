@@ -480,7 +480,15 @@ namespace Rhino.Connectors.Azure
 
         private Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration GetConfiguration(int id)
         {
-            return planManagement.GetTestConfigurationByIdAsync(project, id).GetAwaiter().GetResult();
+            try
+            {
+                return planManagement.GetTestConfigurationByIdAsync(project, id).GetAwaiter().GetResult();
+            }
+            catch (Exception e) when (e != null)
+            {
+                logger?.Warn($"Get-Configuration -Server {connection.Uri} -Project {project} = NotSupported");
+            }
+            return default;
         }
 
         private int GetConfigurationId()

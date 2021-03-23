@@ -146,7 +146,7 @@ namespace Rhino.Connectors.Azure.Framework
             var bug = testCase.UpdateBug(openBug, connection);
 
             // get
-            return JsonSerializer.Serialize(bug);
+            return bug == default ? string.Empty : JsonSerializer.Serialize(bug);
         }
         #endregion
 
@@ -159,6 +159,14 @@ namespace Rhino.Connectors.Azure.Framework
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
+
+            // exit conditions
+            if(testRun == null)
+            {
+                logger?.Warn($"Close-Bugs -Test {testCase.Key} -Run -1 = (NotFound | NotSupported)");
+                return Array.Empty<string>();
+            }
+
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
             var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
             var project = testCase.GetProjectName();

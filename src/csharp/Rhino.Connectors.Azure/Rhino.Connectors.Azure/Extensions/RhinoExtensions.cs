@@ -433,6 +433,14 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var project = testCase.GetProjectName();
             var testRun = testCase.GetTestRun(connection);
+
+            // exit conditions
+            if(testRun == null)
+            {
+                return default;
+            }
+
+            // setup
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key, Compare));
 
             var document = testCase.GetBugDocument(
@@ -482,6 +490,14 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
+
+            // exit conditions
+            if(testRun == null)
+            {
+                return default;
+            }
+
+            // setup
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key, Compare));
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
             var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
