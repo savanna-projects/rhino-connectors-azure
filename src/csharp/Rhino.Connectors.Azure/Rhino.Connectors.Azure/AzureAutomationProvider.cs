@@ -866,11 +866,21 @@ namespace Rhino.Connectors.Azure
             testCase.Context[AzureContextEntry.TestResultId] = result;
 
             // get iterations results
-            return testManagement
-                .GetTestResultsAsync(project, testCase.TestRunKey.ToInt(), ResultDetails.Iterations)
+            var results = new ConcurrentBag<TestCaseResult>();
+            var partialResults = testManagement
+                .GetTestResultsAsync(project, testCase.TestRunKey.ToInt())
                 .GetAwaiter()
-                .GetResult()
-                .Where(i => i.TestCase.Id.Equals(testCase.Key));
+                .GetResult();
+
+            foreach (var partialResult in partialResults)
+            {
+                var fullResult = testManagement
+                    .GetTestResultByIdAsync(project, testCase.TestRunKey.ToInt(), partialResult.Id, ResultDetails.Iterations)
+                    .GetAwaiter()
+                    .GetResult();
+                results.Add(fullResult);
+            }
+            return results;
         }
 
         private static void SetIterationPassOrFail(RhinoTestCase testCase, TestCaseResult result, TestIterationDetailsModel iteration)
@@ -914,11 +924,21 @@ namespace Rhino.Connectors.Azure
 
             // setup
             _ = int.TryParse(TestRun.Key, out int runId);
-            var testCaseResults = testManagement
-                .GetTestResultsAsync(project, runId, ResultDetails.Iterations)
+            var partialResults = testManagement
+                .GetTestResultsAsync(project, runId)
                 .GetAwaiter()
                 .GetResult()
                 .Where(i => i.TestCase.Id.Equals(testCase.Key));
+
+            var testCaseResults = new List<TestCaseResult>();
+            foreach (var partialResult in partialResults)
+            {
+                var result = testManagement
+                    .GetTestResultByIdAsync(project, runId, partialResult.Id, ResultDetails.Iterations)
+                    .GetAwaiter()
+                    .GetResult();
+                testCaseResults.Add(result);
+            }
 
             // setup
             var attachments = testCase.Steps.SelectMany(i => i.GetAttachments()).ToList();
