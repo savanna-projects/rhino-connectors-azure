@@ -850,27 +850,32 @@ namespace Rhino.Connectors.Azure
             _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
 
             // get test results
-            var result = testManagement.GetTestResultsAsync(project, runIdOut)
+            var partialResults = testManagement.GetTestResultsAsync(project, runIdOut)
                 .GetAwaiter()
                 .GetResult()
-                .Find(i => i.TestCase.Id.Equals(testCase.Key));
+                .Where(i => i.TestCase.Id.Equals(testCase.Key));
 
             // exit conditions
-            if (result == null)
+            if (partialResults?.Any() == false)
             {
                 logger?.Debug($"Get-TestResults -TestCase {testCase.Key} = NotFound");
                 return default;
             }
 
             // context
-            testCase.Context[AzureContextEntry.TestResultId] = result;
+            testCase.Context[AzureContextEntry.TestResultId] = partialResults;
 
             // get iterations results
-            return testManagement
-                .GetTestResultsAsync(project, testCase.TestRunKey.ToInt(), ResultDetails.Iterations)
-                .GetAwaiter()
-                .GetResult()
-                .Where(i => i.TestCase.Id.Equals(testCase.Key));
+            var results = new ConcurrentBag<TestCaseResult>();
+            foreach (var partialResult in partialResults)
+            {
+                var fullResult = testManagement
+                    .GetTestResultByIdAsync(project, testCase.TestRunKey.ToInt(), partialResult.Id, ResultDetails.Iterations)
+                    .GetAwaiter()
+                    .GetResult();
+                results.Add(fullResult);
+            }
+            return results;
         }
 
         private static void SetIterationPassOrFail(RhinoTestCase testCase, TestCaseResult result, TestIterationDetailsModel iteration)
@@ -914,11 +919,21 @@ namespace Rhino.Connectors.Azure
 
             // setup
             _ = int.TryParse(TestRun.Key, out int runId);
-            var testCaseResults = testManagement
-                .GetTestResultsAsync(project, runId, ResultDetails.Iterations)
+            var partialResults = testManagement
+                .GetTestResultsAsync(project, runId)
                 .GetAwaiter()
                 .GetResult()
                 .Where(i => i.TestCase.Id.Equals(testCase.Key));
+
+            var testCaseResults = new List<TestCaseResult>();
+            foreach (var partialResult in partialResults)
+            {
+                var result = testManagement
+                    .GetTestResultByIdAsync(project, runId, partialResult.Id, ResultDetails.Iterations)
+                    .GetAwaiter()
+                    .GetResult();
+                testCaseResults.Add(result);
+            }
 
             // setup
             var attachments = testCase.Steps.SelectMany(i => i.GetAttachments()).ToList();
@@ -953,10 +968,10 @@ namespace Rhino.Connectors.Azure
                     if (!response.IsSuccessStatusCode)
                     {
                         logger?.Warn("Add-Attachment" +
-                            $"-File {attachment.FileName}" +
-                            $"-Run {runId}" +
-                            $"-Result {resultId}" +
-                            $"-Iteration {iteration} = {response.StatusCode} - {response.ReasonPhrase}");
+                            $" -File {attachment.FileName}" +
+                            $" -Run {runId}" +
+                            $" -Result {resultId}" +
+                            $" -Iteration {iteration} = ({response.StatusCode}; {response.ReasonPhrase})");
                     }
                 }
                 catch (Exception e) when (e != null)
