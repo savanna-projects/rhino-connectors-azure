@@ -142,14 +142,14 @@ namespace Rhino.Connectors.Azure.Extensions
                 ActionPath = testStep.GetActionPath(defaultValue: "-1"),
                 StepIdentifier = testStep.GetActionIdentifier("-1"),
                 IterationId = iteration,
-                StartedDate = DateTime.UtcNow.ToAzureDate(addMilliseconds: false)
+                StartedDate = DateTime.Now.ToAzureDate(addMilliseconds: false)
             };
 
             // outcome
             if (setOutcome)
             {
                 actionResult.Outcome = testStep.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
-                actionResult.CompletedDate = DateTime.UtcNow.ToAzureDate(addMilliseconds: false);
+                actionResult.CompletedDate = DateTime.Now.ToAzureDate(addMilliseconds: false);
                 actionResult.DurationInMs = testStep.RunTime.TotalMilliseconds;
             }
 

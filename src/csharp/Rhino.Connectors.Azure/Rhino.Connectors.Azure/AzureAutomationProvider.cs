@@ -973,19 +973,19 @@ namespace Rhino.Connectors.Azure
                     if (!response.IsSuccessStatusCode)
                     {
                         logger?.Warn("Add-Attachment" +
-                            $"-File {attachment.FileName}" +
-                            $"-Run {runId}" +
-                            $"-Result {resultId}" +
-                            $"-Iteration {iteration} = {response.StatusCode} - {response.ReasonPhrase}");
+                            $" -File {attachment.FileName}" +
+                            $" -Run {runId}" +
+                            $" -Result {resultId}" +
+                            $" -Iteration {iteration} = ({response.StatusCode}, {response.ReasonPhrase})");
                     }
                 }
                 catch (Exception e) when (e != null)
                 {
                     logger?.Error("Add-Attachment" +
-                        $"-File {attachment.FileName}" +
-                        $"-Run {runId}" +
-                        $"-Result {resultId}" +
-                        $"-Iteration {iteration} = {e.Message}");
+                        $" -File {attachment.FileName}" +
+                        $" -Run {runId}" +
+                        $" -Result {resultId}" +
+                        $" -Iteration {iteration} = (InternalServerError, {e.Message})");
                 }
             });
         }
