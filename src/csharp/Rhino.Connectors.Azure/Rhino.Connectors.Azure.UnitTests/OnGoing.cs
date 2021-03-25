@@ -19,13 +19,6 @@ namespace Rhino.Connectors.Azure.UnitTests
         [TestMethod]
         public void A()
         {
-            var json = File.ReadAllText(@"C:\Users\yaniv\Desktop\temp\bug.txt");
-            var configuration = JsonSerializer.Deserialize<RhinoConfiguration>(json, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            new AzureConnector(configuration).ProviderManager.DeleteTestRun("all");
-            configuration.Execute(Utilities.Types);
         }
     }
 }
