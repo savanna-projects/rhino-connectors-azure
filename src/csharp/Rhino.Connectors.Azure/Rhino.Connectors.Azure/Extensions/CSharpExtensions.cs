@@ -19,6 +19,23 @@ namespace Rhino.Connectors.Azure.Extensions
     internal static class CSharpExtensions
     {
         /// <summary>
+        /// Add rows into a given <see cref="DataTable"/>.
+        /// </summary>
+        /// <param name="dataTable"><see cref="DataTable"/> to add rows to.</param>
+        /// <param name="numberOfRows">The number of rows to add.</param>
+        public static void AddRows(this DataTable dataTable, int numberOfRows)
+        {
+            // setup
+            dataTable ??= new DataTable();
+
+            // build
+            for (int i = 0; i < numberOfRows; i++)
+            {
+                dataTable.Rows.Add(dataTable.NewRow());
+            }
+        }
+
+        /// <summary>
         /// Gets nullable <see cref="int"/> as non-nullable <see cref="int"/>.
         /// </summary>
         /// <param name="number">Nullable <see cref="int"/>.</param>
