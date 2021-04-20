@@ -27,8 +27,11 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using System.Xml.XPath;
 
 using WorkItem = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models.WorkItem;
 
@@ -55,8 +58,8 @@ namespace Rhino.Connectors.Azure.Extensions
         public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
         {
             // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
+            const string OptionsKey = Connector.AzureTestManager + ":options";
+            var options = configuration.Capabilities.Get(OptionsKey, new Dictionary<string, object>());
 
             // get
             return options.Get(capability, defaultValue);
@@ -72,12 +75,12 @@ namespace Rhino.Connectors.Azure.Extensions
         public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
         {
             // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = configuration.Capabilities.Get(optionsKey, new Dictionary<string, object>());
+            const string OptionsKey = Connector.AzureTestManager + ":options";
+            var options = configuration.Capabilities.Get(OptionsKey, new Dictionary<string, object>());
 
             // put
             options[capability] = value;
-            configuration.Capabilities[optionsKey] = options;
+            configuration.Capabilities[OptionsKey] = options;
         }
         #endregion
 
@@ -220,7 +223,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
-        /// Gets a collection of <see cref="AttachmentReference"/> based on RhinoTestCase screenshots.
+        /// Gets a collection of <see cref="AttachmentReference"/> based on RhinoTestCase screen-shots.
         /// </summary>
         /// <param name="testCase">The RhinoTestCase to get by.</param>
         /// <param name="client"><see cref="WorkItemTrackingHttpClient"/> to use for uploading.</param>
@@ -569,7 +572,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// </summary>
         /// <param name="item">The work item to create reference from.</param>
         /// <returns>A <see cref="ShallowReference"/> for test results.</returns>
-        public static ShallowReference GetTestReference(this WorkItem item) => new ShallowReference
+        public static ShallowReference GetTestReference(this WorkItem item) => new()
         {
             Id = $"{item.Id}",
             Name = item.Fields.Get("System.Title", string.Empty),
@@ -852,7 +855,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 testCase.Priority = $"{item.Fields.Get("Microsoft.VSTS.Common.Priority", 2L)}";
                 testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
                 testCase.TotalSteps = testCase.Steps.Count();
-                testCase.DataSource = DoGetDataSource(item);
+                testCase.DataSource = DoGetDataSource(client, item);
                 testCase.Context[AzureContextEntry.WorkItem] = item;
 
                 foreach (var testStep in testCase.Steps)
@@ -976,22 +979,32 @@ namespace Rhino.Connectors.Azure.Extensions
             return rhinoStep;
         }
 
-        private static IEnumerable<IDictionary<string, object>> DoGetDataSource(WorkItem item)
+        private static IEnumerable<IDictionary<string, object>> DoGetDataSource(WorkItemTrackingHttpClient client, WorkItem item)
         {
             // setup
-            var xsd = item
+            var dataSource = item
                 .Fields
                 .Get("Microsoft.VSTS.TCM.LocalDataSource", string.Empty)
                 .Replace(" encoding=\"utf-16\"", string.Empty);
 
-            // exit conditions
-            if (string.IsNullOrEmpty(xsd))
+            // get
+            if (dataSource.IsXml())
             {
-                return Array.Empty<IDictionary<string, object>>();
+                return GetXsd(dataSource);
+            }
+            if(dataSource.IsJson())
+            {
+                return GetJson(client, dataSource);
             }
 
+            // return
+            return Array.Empty<IDictionary<string, object>>();
+        }
+
+        private static IEnumerable<IDictionary<string, object>> GetXsd(string xml)
+        {
             // setup
-            var stream = new MemoryStream(Encoding.UTF8.GetBytes(xsd));
+            var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
 
             // read
             var dataSet = new DataSet();
@@ -1005,6 +1018,33 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return dataTable.ToDictionary();
+        }
+
+        private static IEnumerable<IDictionary<string, object>> GetJson(WorkItemTrackingHttpClient client, string json)
+        {
+            try
+            {
+                // setup
+                var dataMap = JsonDocument.Parse(json).RootElement.GetProperty("sharedParameterDataSetIds");
+                var items = JsonSerializer.Deserialize<IEnumerable<int>>(dataMap.ToString());
+                var id = items.Any() ? items.ElementAt(0) : default;
+
+                // not found
+                if(id == default)
+                {
+                    return Array.Empty<IDictionary<string, object>>();
+                }
+
+                // build
+                var workItem = client.GetWorkItemAsync(id, expand: WorkItemExpand.All).GetAwaiter().GetResult();
+
+                // get
+                return DoGetSharedParameters(workItem).ToDictionary();
+            }
+            catch (Exception e) when (e != null)
+            {
+                return Array.Empty<IDictionary<string, object>>();
+            }
         }
         #endregion
 
@@ -1187,8 +1227,8 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IDictionary<string, object> DoGetCustomFields(RhinoTestCase testCase)
         {
             // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = testCase.Context.Get(optionsKey, new Dictionary<string, object>());
+            const string OptionsKey = Connector.AzureTestManager + "options";
+            var options = testCase.Context.Get(OptionsKey, new Dictionary<string, object>());
 
             // get
             return options.Get(AzureCapability.CustomFields, new Dictionary<string, object>());
@@ -1208,6 +1248,45 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // get
             return item.Fields.Get("System.TeamProject", string.Empty);
+        }
+
+        // gets shared parameters as data table
+        private static DataTable DoGetSharedParameters(WorkItem item)
+        {
+            // constants
+            const string TcmParameters = "Microsoft.VSTS.TCM.Parameters";
+
+            // setup conditions
+            var isType = item.Fields["System.WorkItemType"].Equals("Shared Parameter");
+            var isField = item.Fields.ContainsKey(TcmParameters);
+            var isParameters = isField && !string.IsNullOrEmpty($"{item.Fields[TcmParameters]}");
+
+            // exit conditions
+            if (!isType || !isParameters || !$"{item.Fields[TcmParameters]}".IsXml())
+            {
+                return new DataTable();
+            }
+
+            // setup
+            var xml = XDocument.Parse($"{item.Fields[TcmParameters]}");
+            var table = new DataTable();
+
+            // build
+            var columns = xml.XPathSelectElements("//param").Select(i => new DataColumn(i.Value, typeof(string)));
+            var rows = xml.XPathSelectElements("//dataRow").ToList();
+            table.Columns.AddRange(columns.ToArray());
+            table.AddRows(rows.Count);
+            for (int i = 0; i < rows.Count; i++)
+            {
+                foreach (var parameter in rows[i].XPathSelectElements("kvp"))
+                {
+                    var key = parameter.Attribute("key").Value;
+                    table.Rows[i][key] = parameter.Attribute("value").Value;
+                }
+            }
+
+            // get
+            return table;
         }
         #endregion
     }

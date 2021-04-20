@@ -156,7 +156,17 @@ namespace Rhino.Connectors.Azure
             }
 
             // log
-            var distinctTestCases = testCases.DistinctBy(i => i.Key).ToList();
+            var invalidTestCases = testCases
+                .Where(i => i.Steps.Any(i => string.IsNullOrEmpty(i.Action)))
+                .Select(i => i.Key)
+                .Distinct();
+            if (invalidTestCases.Any())
+            {
+                logger?.Warn($"Get-TestCases -Invalid = {JsonConvert.SerializeObject(invalidTestCases)}");
+            }
+
+            // log
+            var distinctTestCases = testCases.DistinctBy(i => i.Key).Where(i => !invalidTestCases.Contains(i.Key)).ToList();
             logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
 
             // get
@@ -686,8 +696,8 @@ namespace Rhino.Connectors.Azure
         private int GetFromOptions(string optionsEntry)
         {
             // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var azureOptions = CSharpExtensions.Get(Configuration.Capabilities, optionsKey, new Dictionary<string, object>());
+            const string OptionsKey = Connector.AzureTestManager + "options";
+            var azureOptions = CSharpExtensions.Get(Configuration.Capabilities, OptionsKey, new Dictionary<string, object>());
 
             // exit conditions
             if (!azureOptions.ContainsKey(optionsEntry))
