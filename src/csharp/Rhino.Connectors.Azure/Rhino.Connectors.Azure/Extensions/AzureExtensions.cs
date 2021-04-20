@@ -1227,8 +1227,8 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IDictionary<string, object> DoGetCustomFields(RhinoTestCase testCase)
         {
             // setup
-            var optionsKey = $"{Connector.AzureTestManager}:options";
-            var options = testCase.Context.Get(optionsKey, new Dictionary<string, object>());
+            const string OptionsKey = Connector.AzureTestManager + "options";
+            var options = testCase.Context.Get(OptionsKey, new Dictionary<string, object>());
 
             // get
             return options.Get(AzureCapability.CustomFields, new Dictionary<string, object>());
