@@ -156,7 +156,17 @@ namespace Rhino.Connectors.Azure
             }
 
             // log
-            var distinctTestCases = testCases.DistinctBy(i => i.Key).ToList();
+            var invalidTestCases = testCases
+                .Where(i => i.Steps.Any(i => string.IsNullOrEmpty(i.Action)))
+                .Select(i => i.Key)
+                .Distinct();
+            if (invalidTestCases.Any())
+            {
+                logger?.Warn($"Get-TestCases -Invalid = {JsonConvert.SerializeObject(invalidTestCases)}");
+            }
+
+            // log
+            var distinctTestCases = testCases.DistinctBy(i => i.Key).Where(i => !invalidTestCases.Contains(i.Key)).ToList();
             logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
 
             // get
