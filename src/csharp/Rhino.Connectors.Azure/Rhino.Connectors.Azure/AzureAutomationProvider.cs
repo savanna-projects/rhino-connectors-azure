@@ -696,7 +696,7 @@ namespace Rhino.Connectors.Azure
         private int GetFromOptions(string optionsEntry)
         {
             // setup
-            const string OptionsKey = Connector.AzureTestManager + "options";
+            const string OptionsKey = Connector.AzureTestManager + ":options";
             var azureOptions = CSharpExtensions.Get(Configuration.Capabilities, OptionsKey, new Dictionary<string, object>());
 
             // exit conditions
