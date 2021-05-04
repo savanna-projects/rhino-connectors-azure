@@ -11,6 +11,8 @@
  */
 using Gravity.Abstraction.Logging;
 using Gravity.Extensions;
+using Gravity.Services.Comet.Engine.Attributes;
+using Gravity.Services.DataContracts;
 
 using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
@@ -40,6 +42,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -122,6 +125,47 @@ namespace Rhino.Connectors.Azure
             itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
             testManagement = connection.GetClient<TestManagementHttpClient>();
             planManagement = connection.GetClient<TestPlanHttpClient>();
+        }
+        #endregion
+
+        // TODO: implement getting plugins from ALM (shared Steps)
+        //       1. break down all sub method into extensions
+        //       2. get description from work item to add as meta data
+        #region *** Plugins           ***
+        /// <summary>
+        /// Implements to load extra collections of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.
+        /// </summary>
+        /// <param name="plugins">An existing collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</param>
+        /// <returns>A collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</returns>
+        /// <remarks>You can implement this method to load plugins from A.L.M or other source.</remarks>
+        public override (IEnumerable<RhinoPlugin> Rhino, IEnumerable<PluginAttribute> Gravity) OnGetPlugins(IEnumerable<RhinoPlugin> plugins)
+        {
+            //// setup
+            //var wiql = new Wiql()
+            //{
+            //    Query = "SELECT * FROM WorkItems where [Work Item Type] = 'Shared Steps'"
+            //};
+
+            //// get shared steps
+            //var items = itemManagement
+            //    .QueryByWiqlAsync(wiql, project)
+            //    .GetAwaiter()
+            //    .GetResult()
+            //    .WorkItems
+            //    .Select(i => i.Id)
+            //    .ToArray();
+
+            //// work items and fetch titles
+            //var sharedSteps = itemManagement
+            //    .GetWorkItemsAsync(items, expand: WorkItemExpand.All)
+            //    .GetAwaiter()
+            //    .GetResult();
+
+            // build
+            //var connectorPlugins = sharedSteps[0].CreateActionAttribute();
+
+            // get
+            return (Array.Empty<RhinoPlugin>(), Array.Empty<PluginAttribute>());
         }
         #endregion
 
@@ -355,6 +399,8 @@ namespace Rhino.Connectors.Azure
         }
         #endregion
 
+        // TODO: implement supporting for literal shared steps by creating
+        //       a shared step entry if the literal step match a shared step title.
         #region *** Create: Test Case ***
         /// <summary>
         /// Creates a new test case under the specified automation provider.
