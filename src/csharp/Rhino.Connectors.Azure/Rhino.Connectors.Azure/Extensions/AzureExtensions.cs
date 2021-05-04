@@ -4,6 +4,8 @@
  * RESOURCES
  */
 using Gravity.Extensions;
+using Gravity.Services.Comet.Engine.Attributes;
+using Gravity.Services.DataContracts;
 
 using HtmlAgilityPack;
 
@@ -482,6 +484,54 @@ namespace Rhino.Connectors.Azure.Extensions
         #endregion
 
         #region *** Work Item Object ***
+        /// <summary>
+        /// Gets a RhinoPlugin from a Test Case or Shared Steps <see cref="WorkItem"/>.
+        /// </summary>
+        /// <param name="client">The <see cref="WorkItemTrackingHttpClient"/> to use for fetching.</param>
+        /// <param name="id">The <see cref="WorkItem.Id"/> by which to get the <see cref="WorkItem"/></param>
+        /// <returns>A RhinoPlugin based on the Test Case or Shared Steps <see cref="WorkItem"/></returns>
+        public static RhinoPlugin GetRhinoPlugin(this WorkItemTrackingHttpClient client, int id)
+        {
+            // setup
+            var testCase = DoGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
+
+            // build
+            return new RhinoPlugin
+            {
+                Parameters = Array.Empty<RhinoPluginParameter>()
+            };
+        }
+
+        public static ActionAttribute GetPluginPa(this WorkItem item)
+        {
+            // bad request
+            var itemType = $"{item.Fields["System.WorkItemType"]}";
+            if (!itemType.Equals("Shared Steps", StringComparison.OrdinalIgnoreCase))
+            {
+                var message = $"Create-ActionAttribute -ItemType {item.Fields[""]} = (BadRequest | Invalid item type)";
+                throw new InvalidOperationException(message);
+            }
+
+            // TODO: get description
+            const string description = "";
+            var title = $"{item.Fields["System.Title"]}";
+
+            // build
+            var examples = new PluginExample
+            {
+                ActionExample = new ActionRule { ActionType = title },
+                Description = $"A shared steps entity fetched from Azure DevOps: {item.Url}"
+            };
+
+            // get
+            return new ActionAttribute
+            {
+                Description = description,
+                Name = title,
+                Examples = new[] { examples }
+            };
+        }
+
         /// <summary>
         /// Sets state and reason of a <see cref="WorkItem"/>.
         /// </summary>
