@@ -7,9 +7,11 @@ using Gravity.Abstraction.Logging;
 
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
+using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
 using Microsoft.VisualStudio.Services.WebApi;
 
 using Rhino.Api.Contracts.AutomationProvider;
+using Rhino.Api.Contracts.Configuration;
 using Rhino.Connectors.Azure.Extensions;
 
 using System;
@@ -24,14 +26,37 @@ namespace Rhino.Connectors.Azure.Framework
     /// </summary>
     public class AzureBugsManager
     {
+        // constants
+        private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
+
         // members: clients
         private readonly WorkItemTrackingHttpClient itemManagement;
 
         // members: state        
         private readonly ILogger logger;
         private readonly VssConnection connection;
+        private readonly RhinoConfiguration configuration;
 
         #region *** Constructors ***
+        /// <summary>
+        /// Creates a new instance of this BugManager.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration by which to create the BugManager.</param>
+        public AzureBugsManager(RhinoConfiguration configuration)
+            : this(configuration, logger: default)
+        { }
+
+        /// <summary>
+        /// Creates a new instance of this BugManager.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration by which to create the BugManager.</param>
+        /// <param name="logger">Logger implementation for the BugManager.</param>
+        public AzureBugsManager(RhinoConfiguration configuration, ILogger logger)
+            : this(configuration.GetVssConnection(), logger)
+        {
+            this.configuration = configuration;
+        }
+
         /// <summary>
         /// Creates a new instance of this BugManager.
         /// </summary>
@@ -44,7 +69,7 @@ namespace Rhino.Connectors.Azure.Framework
         /// Creates a new instance of this BugManager.
         /// </summary>
         /// <param name="connection"><see cref="VssConnection"/> by which to factor Azure clients.</param>
-        /// <param name="logger">Logger implementation for this JiraClient</param>
+        /// <param name="logger">Logger implementation for the BugManager.</param>
         public AzureBugsManager(VssConnection connection, ILogger logger)
         {
             // setup
@@ -55,7 +80,7 @@ namespace Rhino.Connectors.Azure.Framework
             itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
 
             // logger
-            logger?.Debug($"Create-BugManager -Connection {connection.Uri} = OK");
+            logger?.Debug($"Create-BugManager -Connection {connection.Uri} = Created");
         }
         #endregion
 
@@ -135,11 +160,7 @@ namespace Rhino.Connectors.Azure.Framework
             // find duplicates
             if (openBugs.Length > 1)
             {
-                var duplicatesClosed = openBugs
-                    .Skip(1)
-                    .Select(i => i.SetState(connection, "Resolved", "Duplicate"))
-                    .All(i => i);
-                logger?.Info($"Update-Bug -Duplicates = {duplicatesClosed}");
+                SetDuplicates(openBugs);
             }
 
             // update Bug
@@ -155,41 +176,31 @@ namespace Rhino.Connectors.Azure.Framework
         /// Close all existing bugs.
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
-        public IEnumerable<string> OnCloseBugs(RhinoTestCase testCase, string status, string resolution)
+        public IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
 
             // exit conditions
-            if(testRun == null)
+            if (testRun == null)
             {
                 logger?.Warn($"Close-Bugs -Test {testCase.Key} -Run -1 = (NotFound | NotSupported)");
                 return Array.Empty<string>();
             }
 
-            var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
-            var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
+            // setup
+            var resolvedState = GetStatesByCategory("Resolved").FirstOrDefault();
+            var closeState = GetCloseState();
+            var closeReason = "Fixed and verified";
             var project = testCase.GetProjectName();
-
+            var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
+            
             // duplicates
             var matchingBugs = testCase.GetOpenBugs(connection);
-            if (matchingBugs.Any())
-            {
-                _ = matchingBugs
-                    .Skip(1)
-                    .Select(i => itemManagement.AddComment(i, comment))
-                    .Select(i => i.SetState(connection, "Resolved", "Duplicate"))
-                    .ToArray();
-            }
+            SetDuplicates(matchingBugs);
 
-            // open bugs
-            var closeStatus = new[] { "Closed", "Resolved" };
-            var openBugs = itemManagement
-                .GetBugs(testCase)
-                .Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"))
-                .Concat(new[] { matchingBugs.FirstOrDefault() })
-                .Where(i => i != default)
-                .Select(i => itemManagement.AddComment(i, comment));
+            // add comments when updating bugs
+            var openBugs = AddComments(testCase, testRun.WebAccessUrl);
 
             // exit conditions
             if (!openBugs.Any())
@@ -198,7 +209,7 @@ namespace Rhino.Connectors.Azure.Framework
             }
 
             // setup
-            var isAll = openBugs.Select(i => i.SetState(connection, status, resolution)).All(i => i);
+            var isAll = openBugs.Select(i => i.SetState(connection, closeState, closeReason)).All(i => i);
             var bugsClosed = isAll
                 ? openBugs.Concat(matchingBugs.Skip(1)).Select(i => i.Url)
                 : Array.Empty<string>();
@@ -221,11 +232,68 @@ namespace Rhino.Connectors.Azure.Framework
                 .GetAwaiter()
                 .GetResult();
 
+            // set context
             testCase.Context[ContextEntry.BugClosed] = bugsClosed;
 
-            // close bugs: duplicate (if any)
+            // close bugs
             return bugsClosed;
         }
+        
+        private string GetCloseState()
+        {
+            // setup
+            var fromConfiguration = configuration.GetAzureCapability("bugCloseState", string.Empty);
+            var fromList = GetStatesByCategory("Completed").FirstOrDefault();
+
+            // get
+            if (!string.IsNullOrEmpty(fromConfiguration))
+            {
+                return fromConfiguration;
+            }
+            return string.IsNullOrEmpty(fromList) ? string.Empty : fromList;
+        }
+
+        private void SetDuplicates(IEnumerable<WorkItem> items)
+        {
+            // exit conditions
+            if (items?.Any() == false)
+            {
+                return;
+            }
+
+            // setup
+            var resolvedState = GetStatesByCategory("Resolved").FirstOrDefault();
+
+            // invoke
+            foreach (var item in items.Skip(1))
+            {
+                var stateResult = item.SetState(connection, resolvedState, "Duplicate") ? "OK" : "InternalServerError";
+                logger?.Debug($"Set-Duplicates -Bug {item.Id} = {stateResult}");
+            }
+        }
+
+        private IEnumerable<WorkItem> AddComments(RhinoTestCase testCase, string runWebAccessUrl)
+        {
+            // setup
+            var closeState = "";
+            var comment =
+                "Automatically updated by Rhino engine on " +
+                $"execution <a href=\"{runWebAccessUrl}\">{testCase.TestRunKey}</a>.";
+
+            return itemManagement
+                .GetBugs(testCase)
+                .Where(i => !closeState.Equals($"{i.Fields["System.State"]}", Compare))
+                .Where(i => i != default)
+                .Select(i => itemManagement.AddComment(i, comment));
+        }
         #endregion
+
+        // Utilities
+        private IEnumerable<string> GetStatesByCategory(string category) => itemManagement
+            .GetWorkItemTypeStatesAsync(configuration.ConnectorConfiguration.Project, "Bug")
+            .GetAwaiter()
+            .GetResult()
+            .Where(i => i.Category.Equals(category, Compare))
+            .Select(i => i.Name);
     }
 }
