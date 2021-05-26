@@ -189,7 +189,6 @@ namespace Rhino.Connectors.Azure.Framework
             }
 
             // setup
-            var resolvedState = GetStatesByCategory("Resolved").FirstOrDefault();
             var closeState = GetCloseState();
             var closeReason = "Fixed and verified";
             var project = testCase.GetProjectName();
@@ -253,25 +252,6 @@ namespace Rhino.Connectors.Azure.Framework
             return string.IsNullOrEmpty(fromList) ? string.Empty : fromList;
         }
 
-        private void SetDuplicates(IEnumerable<WorkItem> items)
-        {
-            // exit conditions
-            if (items?.Any() == false)
-            {
-                return;
-            }
-
-            // setup
-            var resolvedState = GetStatesByCategory("Resolved").FirstOrDefault();
-
-            // invoke
-            foreach (var item in items.Skip(1))
-            {
-                var stateResult = item.SetState(connection, resolvedState, "Duplicate") ? "OK" : "InternalServerError";
-                logger?.Debug($"Set-Duplicates -Bug {item.Id} = {stateResult}");
-            }
-        }
-
         private IEnumerable<WorkItem> AddComments(RhinoTestCase testCase, string runWebAccessUrl)
         {
             // setup
@@ -289,6 +269,27 @@ namespace Rhino.Connectors.Azure.Framework
         #endregion
 
         // Utilities
+        private void SetDuplicates(IEnumerable<WorkItem> items)
+        {
+            // exit conditions
+            if (items?.Any() == false)
+            {
+                return;
+            }
+
+            // setup
+            var state = GetStatesByCategory("Resolved");
+            var reason = "Duplicate";
+            items = items.Where(i => !(state.Contains($"{i.Fields["System.State"]}") && $"{i.Fields["System.Reason"]}".Equals(reason)));
+
+            // invoke
+            foreach (var item in items.Skip(1))
+            {
+                var stateResult = item.SetState(connection, state.FirstOrDefault(), reason) ? "OK" : "InternalServerError";
+                logger?.Debug($"Set-Duplicates -Bug {item.Id} = {stateResult}");
+            }
+        }
+
         private IEnumerable<string> GetStatesByCategory(string category) => itemManagement
             .GetWorkItemTypeStatesAsync(configuration.ConnectorConfiguration.Project, "Bug")
             .GetAwaiter()

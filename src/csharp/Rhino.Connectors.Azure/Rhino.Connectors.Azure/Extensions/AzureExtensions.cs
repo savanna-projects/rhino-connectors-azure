@@ -283,7 +283,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return InvokeGetCustomFields(testCase);
         }
 
-        // *** Bug Invokecument ***
+        // *** Bug document ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a bug <see cref="WorkItem"/>.
         /// </summary>
@@ -564,6 +564,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return InvokeSetState(item, client, state, reason);
         }
 
+        // TODO: allow passing custom comment
         private static bool InvokeSetState(
             this WorkItem item, WorkItemTrackingHttpClient client, string state, string reason)
         {
