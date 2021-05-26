@@ -146,6 +146,7 @@ namespace Rhino.Connectors.Azure.Framework
         public string OnUpdateBug(RhinoTestCase testCase)
         {
             // setup
+            var testRun = testCase.GetTestRun(connection);
             var openBugs = testCase.GetOpenBugs(connection).ToArray();
 
             // exit conditions
@@ -160,7 +161,7 @@ namespace Rhino.Connectors.Azure.Framework
             // find duplicates
             if (openBugs.Length > 1)
             {
-                SetDuplicates(openBugs);
+                SetDuplicates(openBugs, testRun);
             }
 
             // update Bug
@@ -189,17 +190,12 @@ namespace Rhino.Connectors.Azure.Framework
             }
 
             // setup
-            var closeState = GetCloseState();
-            var closeReason = "Fixed and verified";
             var project = testCase.GetProjectName();
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
             
             // duplicates
-            var matchingBugs = testCase.GetOpenBugs(connection);
-            SetDuplicates(matchingBugs);
-
-            // add comments when updating bugs
-            var openBugs = AddComments(testCase, testRun.WebAccessUrl);
+            var openBugs = testCase.GetOpenBugs(connection);
+            SetDuplicates(openBugs, testRun);
 
             // exit conditions
             if (!openBugs.Any())
@@ -208,10 +204,8 @@ namespace Rhino.Connectors.Azure.Framework
             }
 
             // setup
-            var isAll = openBugs.Select(i => i.SetState(connection, closeState, closeReason)).All(i => i);
-            var bugsClosed = isAll
-                ? openBugs.Concat(matchingBugs.Skip(1)).Select(i => i.Url)
-                : Array.Empty<string>();
+            var isAllClosed = CloseBugs(openBugs, testRun);
+            var bugsClosed = isAllClosed ? openBugs.Select(i => i.Url) : Array.Empty<string>();
 
             // add test results
             if (!testCaseResults.Any())
@@ -252,27 +246,34 @@ namespace Rhino.Connectors.Azure.Framework
             return string.IsNullOrEmpty(fromList) ? string.Empty : fromList;
         }
 
-        private IEnumerable<WorkItem> AddComments(RhinoTestCase testCase, string runWebAccessUrl)
+        private bool CloseBugs(IEnumerable<WorkItem> bugs, TestRun testRun)
         {
             // setup
-            var closeState = "";
+            var closeState = GetCloseState();
+            var closeReason = "Fixed and verified";
+            var results = new List<bool>();
             var comment =
-                "Automatically updated by Rhino engine on " +
-                $"execution <a href=\"{runWebAccessUrl}\">{testCase.TestRunKey}</a>.";
+                "Automatically closed by Rhino engine on " +
+                $"execution <a href=\"{testRun.WebAccessUrl}\">{testRun.Id}</a>.";
 
-            return itemManagement
-                .GetBugs(testCase)
-                .Where(i => !closeState.Equals($"{i.Fields["System.State"]}", Compare))
-                .Where(i => i != default)
-                .Select(i => itemManagement.AddComment(i, comment));
+            // close
+            foreach (var bug in bugs)
+            {
+                var result = bug.SetState(connection, closeState, closeReason);
+                itemManagement.AddComment(bug, comment);
+                results.Add(result);
+            }
+
+            // get
+            return results.All(i => i);
         }
         #endregion
 
         // Utilities
-        private void SetDuplicates(IEnumerable<WorkItem> items)
+        private void SetDuplicates(IEnumerable<WorkItem> bugs, TestRun testRun)
         {
             // exit conditions
-            if (items?.Any() == false)
+            if (bugs?.Any() == false)
             {
                 return;
             }
@@ -280,13 +281,17 @@ namespace Rhino.Connectors.Azure.Framework
             // setup
             var state = GetStatesByCategory("Resolved");
             var reason = "Duplicate";
-            items = items.Where(i => !(state.Contains($"{i.Fields["System.State"]}") && $"{i.Fields["System.Reason"]}".Equals(reason)));
+            var comment =
+                "Automatically marked as duplicate by Rhino engine on " +
+                $"execution <a href=\"{testRun.WebAccessUrl}\">{testRun.Id}</a>.";
+            bugs = bugs.Where(i => !(state.Contains($"{i.Fields["System.State"]}") && $"{i.Fields["System.Reason"]}".Equals(reason)));
 
             // invoke
-            foreach (var item in items.Skip(1))
+            foreach (var bug in bugs.Skip(1))
             {
-                var stateResult = item.SetState(connection, state.FirstOrDefault(), reason) ? "OK" : "InternalServerError";
-                logger?.Debug($"Set-Duplicates -Bug {item.Id} = {stateResult}");
+                var stateResult = bug.SetState(connection, state.FirstOrDefault(), reason) ? "OK" : "InternalServerError";
+                itemManagement.AddComment(bug, comment);
+                logger?.Debug($"Set-Duplicates -Bug {bug.Id} = {stateResult}");
             }
         }
 
