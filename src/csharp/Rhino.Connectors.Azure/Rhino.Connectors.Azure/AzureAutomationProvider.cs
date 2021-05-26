@@ -12,7 +12,6 @@
 using Gravity.Abstraction.Logging;
 using Gravity.Extensions;
 using Gravity.Services.Comet.Engine.Attributes;
-using Gravity.Services.DataContracts;
 
 using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
@@ -42,7 +41,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -108,7 +106,7 @@ namespace Rhino.Connectors.Azure
             var credentials = configuration.GetVssCredentials();
             connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
             project = configuration.ConnectorConfiguration.Project;
-            bugsManager = new AzureBugsManager(connection);
+            bugsManager = new AzureBugsManager(configuration, logger);
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
             options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
@@ -1117,8 +1115,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>A collection of updated bugs.</returns>
         public override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
-            // setup
-            return bugsManager.OnCloseBugs(testCase, "Closed", "Fixed and verified");
+            return bugsManager.OnCloseBugs(testCase);
         }
 
         /// <summary>

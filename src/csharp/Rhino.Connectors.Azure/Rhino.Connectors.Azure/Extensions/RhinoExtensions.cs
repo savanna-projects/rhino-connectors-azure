@@ -574,6 +574,26 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns><see cref="VssCredentials"/> object for interacting with Azure DevOps or Team Foundation Server.</returns>
         public static VssCredentials GetVssCredentials(this RhinoConfiguration configuration)
         {
+            return InvokeGetVssCredentials(configuration);
+        }
+
+        /// <summary>
+        /// Gets <see cref="VssConnection"/> by RhinoConfiguration.ConnectorConfiguration.
+        /// </summary>
+        /// <param name="configuration">RhinoConfiguration by which to get <see cref="VssConnection"/>.</param>
+        /// <returns><see cref="VssConnection"/> object for interacting with Azure DevOps or Team Foundation Server.</returns>
+        public static VssConnection GetVssConnection(this RhinoConfiguration configuration)
+        {
+            // setup
+            var credentials = InvokeGetVssCredentials(configuration);
+            var baseUrl = new Uri(configuration.ConnectorConfiguration.Collection);
+
+            // get
+            return new VssConnection(baseUrl, credentials);
+        }
+
+        private static VssCredentials InvokeGetVssCredentials(RhinoConfiguration configuration)
+        {
             // setup
             var isOs = configuration.ConnectorConfiguration.AsOsUser;
             var userName = configuration.ConnectorConfiguration.UserName;

@@ -38,15 +38,16 @@ The options must be passed under `<connector_name>:options` key, as follow:
 ...
 ```  
 
-|Name                |Type   |Description                                                                                                                     |
-|--------------------|-------|--------------------------------------------------------------------------------------------------------------------------------|
-|areaPath            |string |The area path under which items will be created (tests, bugs, etc.). If not selected, default value will be used.               |
-|iterationPath       |string |The iteration under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.                |
-|customFields        |object |Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.). The fields names must be system fields names.|
-|testPlan            |number |The test plan ID to use. If set, tests will be created under this plan. _**Mandatory for creating test runs on TFS <= 2018**_.  |
-|testSuite           |number |The test suite ID to use. If set, tests will be executed from this suite only. If not set, tests will run from all locations.   |
-|testConfiguration   |number |The test configuration ID which will be used when running the current tests. If not selected, defaults values will be used.     |
+|Name          |Type   |Description                                                                                                                      |
+|--------------|-------|---------------------------------------------------------------------------------------------------------------------------------|
+|areaPath      |string |The area path under which items will be created (tests, bugs, etc.). If not selected, default value will be used.                |
+|iterationPath |string |The iteration under which items will be created (tests, bugs, etc.). If not selected, default will be picked up.                 |
+|customFields  |object |Key/Value pairs of custom fields to apply when creating items (tests, bugs, etc.). The fields names must be system fields names. |
+|testPlan      |number |The test plan ID to use. If set, tests will be created under this plan. _**Mandatory for creating test runs on TFS <= 2018**_.   |
+|testSuite     |number |The test suite ID to use. If set, tests will be executed from this suite only. If not set, tests will run from all locations.    |
+|closeState    |string |A work item state from the _**Completed**_ category which will be used when closing bugs. If not specified, default will be used.|
 
 ## See Also
+[How workflow states and state categories are used in Backlogs and Boards](https://docs.microsoft.com/en-us/azure/devops/boards/work-items/workflow-and-state-categories?view=azure-devops&tabs=basic-process)
 [Azure DevOps, Fields - List](https://docs.microsoft.com/en-us/rest/api/azure/devops/wit/fields/list)
 [Azure DevOps, Work Items Tracking API Documentation](https://docs.microsoft.com/en-us/rest/api/azure/devops/wit)

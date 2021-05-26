@@ -483,6 +483,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
+        // TODO: implement
         #region *** Work Item Object ***
         /// <summary>
         /// Gets a RhinoPlugin from a Test Case or Shared Steps <see cref="WorkItem"/>.
@@ -951,7 +952,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
         private static RhinoTestStep DoGetStep(
             WorkItemTrackingHttpClient client,
-            ConcurrentStack<(IDictionary<string, object> Context, HtmlNode Node)> nodes)
+            ConcurrentStack<(IDictionary<string, object> Context,HtmlNode Node)> nodes)
         {
             // setup > dequeue next
             nodes.TryPop(out (IDictionary<string, object> Context, HtmlNode Node) stepOut);
@@ -1096,6 +1097,20 @@ namespace Rhino.Connectors.Azure.Extensions
                 return Array.Empty<IDictionary<string, object>>();
             }
         }
+
+        /// <summary>
+        /// Gets a collection of availabe states of a <see cref="WorkItem"/> by a <see cref="WorkItemStateColor.Category"/>.
+        /// </summary>
+        /// <param name="client">The <see cref="WorkItemTrackingHttpClient"/> to use for fetching data.</param>
+        /// <param name="project">The project for which to get a list of available states.</param>
+        /// <param name="itemType">The item type for which to get a list of available states.</param>
+        /// <param name="category">The categoty for which to get a list of available states.</param>
+        /// <returns>A collection of availabe states.</returns>
+        public static IEnumerable<string> GetStatesByCategory(
+            this WorkItemTrackingHttpClient client, string project, string itemType, string category)
+        {
+            return DoGetStatesByCategory(client, project, itemType, category);
+        }
         #endregion
 
         #region *** Test Run Object  ***
@@ -1177,9 +1192,10 @@ namespace Rhino.Connectors.Azure.Extensions
             try
             {
                 // setup
-                var closeStatus = new[] { "Closed", "Resolved" };
-                var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
                 var project = DoGetProjectName(testCase);
+                var closeStatus = DoGetStatesByCategory(client, project, "Bug", "Completed");
+                var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
+                
 
                 // exit conditions
                 var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
@@ -1338,6 +1354,14 @@ namespace Rhino.Connectors.Azure.Extensions
             // get
             return table;
         }
+
+        // gets availabe states of a work-item by a category
+        private static IEnumerable<string> DoGetStatesByCategory(WorkItemTrackingHttpClient client, string project, string itemType, string category) => client
+            .GetWorkItemTypeStatesAsync(project, itemType)
+            .GetAwaiter()
+            .GetResult()
+            .Where(i => i.Category.Equals(category, Compare))
+            .Select(i => i.Name);
         #endregion
     }
 }
