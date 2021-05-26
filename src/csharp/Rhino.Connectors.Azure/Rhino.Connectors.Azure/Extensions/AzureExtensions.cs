@@ -96,7 +96,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of <see cref="WorkItem"/>.</returns>
         public static IEnumerable<WorkItem> GetOpenBugs(this RhinoTestCase testCase, WorkItemTrackingHttpClient client)
         {
-            return DoGetOpenBugs(testCase, client);
+            return InvokeGetOpenBugs(testCase, client);
         }
 
         /// <summary>
@@ -111,7 +111,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
 
             // get
-            return DoGetOpenBugs(testCase, client);
+            return InvokeGetOpenBugs(testCase, client);
         }
 
         // *** Work Item ***
@@ -122,7 +122,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A <see cref="WorkItem"/> or <see cref="null"/> if not found.</returns>
         public static WorkItem GetWorkItem(this RhinoTestCase testCase)
         {
-            return DoGetWorkItem(testCase, null);
+            return InvokeGetWorkItem(testCase, null);
         }
 
         /// <summary>
@@ -133,10 +133,10 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A <see cref="WorkItem"/> or <see cref="null"/> if not found.</returns>
         public static WorkItem GetWorkItem(this RhinoTestCase testCase, VssConnection connection)
         {
-            return DoGetWorkItem(testCase, connection);
+            return InvokeGetWorkItem(testCase, connection);
         }
 
-        private static WorkItem DoGetWorkItem(RhinoTestCase testCase, VssConnection connection)
+        private static WorkItem InvokeGetWorkItem(RhinoTestCase testCase, VssConnection connection)
         {
             // setup
             var item = testCase.Context.Get(AzureContextEntry.WorkItem, default(WorkItem));
@@ -150,7 +150,7 @@ namespace Rhino.Connectors.Azure.Extensions
             try
             {
                 // setup
-                var project = DoGetProjectName(testCase);
+                var project = InvokeGetProjectName(testCase);
                 _ = int.TryParse(testCase.Key, out int idOut);
 
                 // build
@@ -188,7 +188,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
                 // build
                 var client = connection.GetClient<TestManagementHttpClient>();
-                var project = DoGetProjectName(testCase);
+                var project = InvokeGetProjectName(testCase);
 
                 // build
                 var testRun = client.GetTestRunByIdAsync(project, testRunOut).GetAwaiter().GetResult();
@@ -211,7 +211,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <remarks>The project name will be fetched from the entity context.</remarks>
         public static string GetProjectName(this RhinoTestCase testCase)
         {
-            return DoGetProjectName(testCase);
+            return InvokeGetProjectName(testCase);
         }
 
         /// <summary>
@@ -221,7 +221,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>The bucket size registered for the automation provider.</returns>
         public static int GetBucketSize(this RhinoTestCase testCase)
         {
-            return DoGetBucketSize(testCase);
+            return InvokeGetBucketSize(testCase);
         }
 
         /// <summary>
@@ -234,9 +234,9 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setup
             var references = new ConcurrentBag<AttachmentReference>();
-            var project = DoGetProjectName(testCase);
+            var project = InvokeGetProjectName(testCase);
             var filesPath = testCase.GetScreenshots();
-            var maxParallel = DoGetBucketSize(testCase);
+            var maxParallel = InvokeGetBucketSize(testCase);
             var options = new ParallelOptions { MaxDegreeOfParallelism = maxParallel };
 
             // build
@@ -260,7 +260,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>The priority.</returns>
         public static string GetPriority(this RhinoTestCase testCase)
         {
-            return DoGetPriority(testCase);
+            return InvokeGetPriority(testCase);
         }
 
         /// <summary>
@@ -270,7 +270,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>The severity.</returns>
         public static string GetSeverity(this RhinoTestCase testCase)
         {
-            return DoGetSeverity(testCase);
+            return InvokeGetSeverity(testCase);
         }
 
         /// <summary>
@@ -280,49 +280,49 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A list of static custom fields.</returns>
         public static IDictionary<string, object> GetCustomFields(this RhinoTestCase testCase)
         {
-            return DoGetCustomFields(testCase);
+            return InvokeGetCustomFields(testCase);
         }
 
-        // *** Bug Document ***
+        // *** Bug Invokecument ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a bug <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a bug by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
         /// <param name="comment">Comment to add when creating the bug.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetBugDocument(this RhinoTestCase testCase, Operation operation, string comment)
         {
             // setup
-            var customFields = DoGetCustomFields(testCase);
+            var customFields = InvokeGetCustomFields(testCase);
 
             // get
-            return DoGetBugDocument(testCase, operation, customFields, comment);
+            return InvokeGetBugDocument(testCase, operation, customFields, comment);
         }
 
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a bug <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a bug by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
-        /// <param name="customFields">A collection of static custom fields to apply when creating the document.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
+        /// <param name="customFields">A collection of static custom fields to apply when creating the Invokecument.</param>
         /// <param name="comment">Comment to add when creating the bug.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetBugDocument(
             this RhinoTestCase testCase, Operation operation, IDictionary<string, object> customFields, string comment)
         {
-            return DoGetBugDocument(testCase, operation, customFields, comment);
+            return InvokeGetBugDocument(testCase, operation, customFields, comment);
         }
 
-        private static JsonPatchDocument DoGetBugDocument(
+        private static JsonPatchDocument InvokeGetBugDocument(
             this RhinoTestCase testCase, Operation operation, IDictionary<string, object> customFields, string comment)
         {
             // build
             var data = new Dictionary<string, object>
             {
                 ["System.Title"] = testCase.Scenario,
-                ["Microsoft.VSTS.Common.Priority"] = DoGetPriority(testCase),
-                ["Microsoft.VSTS.Common.Severity"] = DoGetSeverity(testCase),
+                ["Microsoft.VSTS.Common.Priority"] = InvokeGetPriority(testCase),
+                ["Microsoft.VSTS.Common.Severity"] = InvokeGetSeverity(testCase),
                 ["Microsoft.VSTS.TCM.ReproSteps"] = testCase.GetBugHtml(),
                 ["System.History"] = comment
             };
@@ -332,38 +332,38 @@ namespace Rhino.Connectors.Azure.Extensions
             return AzureUtilities.GetJsonPatchDocument(data, operation);
         }
 
-        // *** Test Document ***
+        // *** Test Invokecument ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a TestCase <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a TestCase by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
         /// <param name="comment">Comment to add when creating the TestCase.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetTestDocument(this RhinoTestCase testCase, Operation operation, string comment)
         {
             // setup
-            var customFields = DoGetCustomFields(testCase);
+            var customFields = InvokeGetCustomFields(testCase);
 
             // get
-            return DoGetTestDocument(testCase, operation, customFields, comment);
+            return InvokeGetTestDocument(testCase, operation, customFields, comment);
         }
 
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a TestCase <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a TestCase by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
-        /// <param name="customFields">A collection of static custom fields to apply when creating the document.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
+        /// <param name="customFields">A collection of static custom fields to apply when creating the Invokecument.</param>
         /// <param name="comment">Comment to add when creating the TestCase.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetTestDocument(
             this RhinoTestCase testCase, Operation operation, IDictionary<string, object> customFields, string comment)
         {
-            return DoGetTestDocument(testCase, operation, customFields, comment);
+            return InvokeGetTestDocument(testCase, operation, customFields, comment);
         }
 
-        private static JsonPatchDocument DoGetTestDocument(
+        private static JsonPatchDocument InvokeGetTestDocument(
             this RhinoTestCase testCase, Operation operation, IDictionary<string, object> customFields, string comment)
         {
             // setup
@@ -375,7 +375,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var data = new Dictionary<string, object>
             {
                 ["System.Title"] = testCase.Scenario,
-                ["Microsoft.VSTS.Common.Priority"] = DoGetPriority(testCase),
+                ["Microsoft.VSTS.Common.Priority"] = InvokeGetPriority(testCase),
                 ["Microsoft.VSTS.TCM.Steps"] = testCase.GetStepsHtml(),
                 ["System.History"] = comment
             };
@@ -483,8 +483,8 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        // TODO: implement
         #region *** Work Item Object ***
+        // TODO: implement
         /// <summary>
         /// Gets a RhinoPlugin from a Test Case or Shared Steps <see cref="WorkItem"/>.
         /// </summary>
@@ -494,7 +494,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static RhinoPlugin GetRhinoPlugin(this WorkItemTrackingHttpClient client, int id)
         {
             // setup
-            var testCase = DoGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
+            var testCase = InvokeGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
 
             // build
             return new RhinoPlugin
@@ -547,7 +547,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
 
             // set
-            return DoSetState(item, client, state, reason);
+            return InvokeSetState(item, client, state, reason);
         }
 
         /// <summary>
@@ -561,10 +561,10 @@ namespace Rhino.Connectors.Azure.Extensions
         public static bool SetState(
             this WorkItem item, WorkItemTrackingHttpClient client, string state, string reason)
         {
-            return DoSetState(item, client, state, reason);
+            return InvokeSetState(item, client, state, reason);
         }
 
-        private static bool DoSetState(
+        private static bool InvokeSetState(
             this WorkItem item, WorkItemTrackingHttpClient client, string state, string reason)
         {
             try
@@ -642,7 +642,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var client = connection.GetClient<WorkItemTrackingHttpClient>();
 
             // create
-            DoCreateReleation(item, client, target, relation);
+            InvokeCreateReleation(item, client, target, relation);
         }
 
         /// <summary>
@@ -654,10 +654,10 @@ namespace Rhino.Connectors.Azure.Extensions
         public static void CreateReleation(
             this WorkItem item, WorkItemTrackingHttpClient client, ShallowReference target, string relation)
         {
-            DoCreateReleation(item, client, target, relation);
+            InvokeCreateReleation(item, client, target, relation);
         }
 
-        private static void DoCreateReleation(
+        private static void InvokeCreateReleation(
             WorkItem item, WorkItemTrackingHttpClient client, ShallowReference target, string relation)
         {
             // setup
@@ -847,7 +847,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of bug <see cref="WorkItem"/>.</returns>
         public static IEnumerable<WorkItem> GetBugs(this WorkItemTrackingHttpClient client, RhinoTestCase testCase)
         {
-            return DoGetBugs(client, testCase);
+            return InvokeGetBugs(client, testCase);
         }
 
         /// <summary>
@@ -858,7 +858,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>RhinoTestCase object.</returns>
         public static RhinoTestCase GetRhinoTestCase(this WorkItemTrackingHttpClient client, int id)
         {
-            return DoGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
+            return InvokeGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
         }
 
         /// <summary>
@@ -869,10 +869,10 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection RhinoTestCase objects.</returns>
         public static IEnumerable<RhinoTestCase> GetRhinoTestCases(this WorkItemTrackingHttpClient client, IEnumerable<int> ids)
         {
-            return DoGetRhinoTestCases(client, ids);
+            return InvokeGetRhinoTestCases(client, ids);
         }
 
-        private static IEnumerable<RhinoTestCase> DoGetRhinoTestCases(WorkItemTrackingHttpClient client, IEnumerable<int> ids)
+        private static IEnumerable<RhinoTestCase> InvokeGetRhinoTestCases(WorkItemTrackingHttpClient client, IEnumerable<int> ids)
         {
             // exit conditions
             if (!ids.Any())
@@ -904,9 +904,9 @@ namespace Rhino.Connectors.Azure.Extensions
                 };
                 testCase.Scenario = item.Fields.Get("System.Title", string.Empty);
                 testCase.Priority = $"{item.Fields.Get("Microsoft.VSTS.Common.Priority", 2L)}";
-                testCase.Steps = DoGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
+                testCase.Steps = InvokeGetSteps(client, stepsDocument.DocumentNode.SelectNodes("//steps/*"));
                 testCase.TotalSteps = testCase.Steps.Count();
-                testCase.DataSource = DoGetDataSource(client, item);
+                testCase.DataSource = InvokeGetDataSource(client, item);
                 testCase.Context[AzureContextEntry.WorkItem] = item;
 
                 foreach (var testStep in testCase.Steps)
@@ -923,7 +923,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return testCases;
         }
 
-        private static IEnumerable<RhinoTestStep> DoGetSteps(WorkItemTrackingHttpClient client, HtmlNodeCollection nodes)
+        private static IEnumerable<RhinoTestStep> InvokeGetSteps(WorkItemTrackingHttpClient client, HtmlNodeCollection nodes)
         {
             // setup
             var nodesQueue = new ConcurrentStack<(IDictionary<string, object> Context, HtmlNode Node)>();
@@ -938,7 +938,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // iterate
             while (!nodesQueue.IsEmpty)
             {
-                var testStep = DoGetStep(client, nodesQueue);
+                var testStep = InvokeGetStep(client, nodesQueue);
                 if (testStep == default)
                 {
                     continue;
@@ -950,7 +950,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return testSteps;
         }
 
-        private static RhinoTestStep DoGetStep(
+        private static RhinoTestStep InvokeGetStep(
             WorkItemTrackingHttpClient client,
             ConcurrentStack<(IDictionary<string, object> Context,HtmlNode Node)> nodes)
         {
@@ -960,7 +960,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // process step
             if (stepOut.Node.Name.Equals("step", StringComparison.OrdinalIgnoreCase))
             {
-                return DoGetStep(step: stepOut);
+                return InvokeGetStep(step: stepOut);
             }
 
             // process shared steps
@@ -999,7 +999,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return default;
         }
 
-        private static RhinoTestStep DoGetStep((IDictionary<string, object> Context, HtmlNode Node) step)
+        private static RhinoTestStep InvokeGetStep((IDictionary<string, object> Context, HtmlNode Node) step)
         {
             // setups
             var onStep = step.Node.SelectNodes(".//parameterizedstring");
@@ -1030,7 +1030,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return rhinoStep;
         }
 
-        private static IEnumerable<IDictionary<string, object>> DoGetDataSource(WorkItemTrackingHttpClient client, WorkItem item)
+        private static IEnumerable<IDictionary<string, object>> InvokeGetDataSource(WorkItemTrackingHttpClient client, WorkItem item)
         {
             // setup
             var dataSource = item
@@ -1090,7 +1090,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 var workItem = client.GetWorkItemAsync(id, expand: WorkItemExpand.All).GetAwaiter().GetResult();
 
                 // get
-                return DoGetSharedParameters(workItem).ToDictionary();
+                return InvokeGetSharedParameters(workItem).ToDictionary();
             }
             catch (Exception e) when (e != null)
             {
@@ -1109,7 +1109,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static IEnumerable<string> GetStatesByCategory(
             this WorkItemTrackingHttpClient client, string project, string itemType, string category)
         {
-            return DoGetStatesByCategory(client, project, itemType, category);
+            return InvokeGetStatesByCategory(client, project, itemType, category);
         }
         #endregion
 
@@ -1126,7 +1126,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var client = connection.GetClient<TestManagementHttpClient>();
 
             // get
-            return DoGetTestRunResults(testRun, client);
+            return InvokeGetTestRunResults(testRun, client);
         }
 
         /// <summary>
@@ -1137,10 +1137,10 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of <see cref="TestCaseResult"/>.</returns>
         public static IEnumerable<TestCaseResult> GetTestRunResults(this TestRun testRun, TestManagementHttpClient client)
         {
-            return DoGetTestRunResults(testRun, client);
+            return InvokeGetTestRunResults(testRun, client);
         }
 
-        private static IEnumerable<TestCaseResult> DoGetTestRunResults(TestRun testRun, TestManagementHttpClient client)
+        private static IEnumerable<TestCaseResult> InvokeGetTestRunResults(TestRun testRun, TestManagementHttpClient client)
         {
             // exit conditions
             if(testRun == null)
@@ -1182,19 +1182,19 @@ namespace Rhino.Connectors.Azure.Extensions
 
         #region *** Utilities        ***
         // gets the test severity or default
-        private static string DoGetSeverity(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Severity) || testCase.Severity == "0"
+        private static string InvokeGetSeverity(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Severity) || testCase.Severity == "0"
             ? "3 - Medium"
             : testCase.Severity;
 
         // get all open bugs for a test case & set context
-        private static IEnumerable<WorkItem> DoGetOpenBugs(RhinoTestCase testCase, WorkItemTrackingHttpClient client)
+        private static IEnumerable<WorkItem> InvokeGetOpenBugs(RhinoTestCase testCase, WorkItemTrackingHttpClient client)
         {
             try
             {
                 // setup
-                var project = DoGetProjectName(testCase);
-                var closeStatus = DoGetStatesByCategory(client, project, "Bug", "Completed");
-                var bugs = DoGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
+                var project = InvokeGetProjectName(testCase);
+                var closeStatus = InvokeGetStatesByCategory(client, project, "Bug", "Completed");
+                var bugs = InvokeGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
                 
 
                 // exit conditions
@@ -1221,7 +1221,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // get all bugs for a test case
-        private static IEnumerable<WorkItem> DoGetBugs(WorkItemTrackingHttpClient client, RhinoTestCase testCase)
+        private static IEnumerable<WorkItem> InvokeGetBugs(WorkItemTrackingHttpClient client, RhinoTestCase testCase)
         {
             // get all related items
             var relations = client
@@ -1252,7 +1252,7 @@ namespace Rhino.Connectors.Azure.Extensions
             var groups = ids.Split(20);
 
             // fetch
-            var options = new ParallelOptions { MaxDegreeOfParallelism = DoGetBucketSize(testCase) };
+            var options = new ParallelOptions { MaxDegreeOfParallelism = InvokeGetBucketSize(testCase) };
             Parallel.ForEach(groups, options, group =>
             {
                 var range = client.GetWorkItemsAsync(group, expand: WorkItemExpand.All).GetAwaiter().GetResult();
@@ -1264,7 +1264,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // gets the bucket size from the test context
-        private static int DoGetBucketSize(RhinoTestCase testCase)
+        private static int InvokeGetBucketSize(RhinoTestCase testCase)
         {
             // setup
             var configuration = testCase.Context.Get(ContextEntry.Configuration, default(RhinoConfiguration));
@@ -1285,12 +1285,12 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // gets the test priority or default
-        private static string DoGetPriority(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Priority)
+        private static string InvokeGetPriority(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Priority)
             ? "3"
             : Regex.Match(testCase.Priority, @"\d+").Value;
 
         // gets a static list of custom fields from test context
-        private static IDictionary<string, object> DoGetCustomFields(RhinoTestCase testCase)
+        private static IDictionary<string, object> InvokeGetCustomFields(RhinoTestCase testCase)
         {
             // setup
             const string OptionsKey = Connector.AzureTestManager + ":options";
@@ -1301,7 +1301,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // gets azure project name from RhinoTestCase
-        private static string DoGetProjectName(RhinoTestCase testCase)
+        private static string InvokeGetProjectName(RhinoTestCase testCase)
         {
             // setup
             var item = testCase.Context.Get<WorkItem>(AzureContextEntry.WorkItem, default);
@@ -1317,7 +1317,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // gets shared parameters as data table
-        private static DataTable DoGetSharedParameters(WorkItem item)
+        private static DataTable InvokeGetSharedParameters(WorkItem item)
         {
             // constants
             const string TcmParameters = "Microsoft.VSTS.TCM.Parameters";
@@ -1356,7 +1356,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         // gets availabe states of a work-item by a category
-        private static IEnumerable<string> DoGetStatesByCategory(WorkItemTrackingHttpClient client, string project, string itemType, string category) => client
+        private static IEnumerable<string> InvokeGetStatesByCategory(WorkItemTrackingHttpClient client, string project, string itemType, string category) => client
             .GetWorkItemTypeStatesAsync(project, itemType)
             .GetAwaiter()
             .GetResult()

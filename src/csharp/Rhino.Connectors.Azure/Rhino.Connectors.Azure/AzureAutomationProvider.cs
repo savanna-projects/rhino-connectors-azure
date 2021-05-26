@@ -127,7 +127,7 @@ namespace Rhino.Connectors.Azure
         #endregion
 
         // TODO: implement getting plugins from ALM (shared Steps)
-        //       1. break down all sub method into extensions
+        //       1. break Invokewn all sub method into extensions
         //       2. get description from work item to add as meta data
         #region *** Plugins           ***
         /// <summary>
@@ -601,7 +601,7 @@ namespace Rhino.Connectors.Azure
             try
             {
                 // 1. Create Run
-                var azureTestRun = DoCreateTestRun(testRun);
+                var azureTestRun = InvokeCreateTestRun(testRun);
 
                 // 2. Get Created Run
                 var testCaseResults = azureTestRun.GetTestRunResults(testManagement);
@@ -632,7 +632,7 @@ namespace Rhino.Connectors.Azure
             return testRun;
         }
 
-        private TestRun DoCreateTestRun(RhinoTestRun testRun)
+        private TestRun InvokeCreateTestRun(RhinoTestRun testRun)
         {
             // setup
             var runCreateModel = GetCreateModel();
@@ -1126,7 +1126,7 @@ namespace Rhino.Connectors.Azure
         public override string OnCloseBug(RhinoTestCase testCase)
         {
             // setup
-            var closedBugs = bugsManager.OnCloseBugs(testCase, "Closed", "Fixed and verified");
+            var closedBugs = bugsManager.OnCloseBugs(testCase);
 
             // get
             return JsonConvert.SerializeObject(closedBugs);

@@ -18,7 +18,7 @@ namespace Rhino.Connectors.Azure.Extensions
 {
     internal static class AzureUtilities
     {
-        #region *** Path Document ***
+        #region *** Path Invokecument ***
         /// <summary>
         /// Creates a <see cref="JsonPatchDocument"/> from creating a <see cref="WorkItem"/>.
         /// </summary>
@@ -26,18 +26,18 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns><see cref="JsonPatchDocument"/> ready for posting.</returns>
         public static JsonPatchDocument GetJsonPatchDocument(IDictionary<string, object> data)
         {
-            return DoGetJsonPatchDocument(data, Operation.Add);
+            return InvokeGetJsonPatchDocument(data, Operation.Add);
         }
 
         /// <summary>
         /// Creates a <see cref="JsonPatchDocument"/> from creating a <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="data">A list of fields to create the <see cref="WorkItem"/> by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to create the document with.</param>
+        /// <param name="operation">The <see cref="Operation"/> to create the Invokecument with.</param>
         /// <returns><see cref="JsonPatchDocument"/> ready for posting.</returns>
         public static JsonPatchDocument GetJsonPatchDocument(IDictionary<string, object> data, Operation operation)
         {
-            return DoGetJsonPatchDocument(data, operation);
+            return InvokeGetJsonPatchDocument(data, operation);
         }
 
         /// <summary>
@@ -69,10 +69,10 @@ namespace Rhino.Connectors.Azure.Extensions
             }
 
             // get
-            return DoGetJsonPatchDocument(data, Operation.Add);
+            return InvokeGetJsonPatchDocument(data, Operation.Add);
         }
 
-        private static JsonPatchDocument DoGetJsonPatchDocument(IDictionary<string, object> data, Operation operation)
+        private static JsonPatchDocument InvokeGetJsonPatchDocument(IDictionary<string, object> data, Operation operation)
         {
             // setup
             var patchDocument = new JsonPatchDocument();
