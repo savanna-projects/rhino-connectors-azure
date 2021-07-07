@@ -16,19 +16,19 @@ namespace Rhino.Connectors.Azure.UnitTests
     [TestClass]
     public class OnGoing
     {
-        [TestMethod]
-        public void A()
-        {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-            var c = File.ReadAllText(@"D:\garbage\a.txt");
-            var configuration = JsonSerializer.Deserialize<RhinoConfiguration>(c, options);
-            var connector = new AzureConnector(configuration).Connect();//Execute();
-            //connector.ProviderManager.GetPlugins();
-            //connector.ProviderManager.DeleteTestRun("all");
-            connector.Execute();
-        }
+        //[TestMethod]
+        //public void A()
+        //{
+        //    var options = new JsonSerializerOptions
+        //    {
+        //        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        //    };
+        //    var c = File.ReadAllText(@"D:\garbage\a.txt");
+        //    var configuration = JsonSerializer.Deserialize<RhinoConfiguration>(c, options);
+        //    var connector = new AzureConnector(configuration).Connect();//Execute();
+        //    //connector.ProviderManager.GetPlugins();
+        //    //connector.ProviderManager.DeleteTestRun("all");
+        //    connector.Execute();
+        //}
     }
 }
