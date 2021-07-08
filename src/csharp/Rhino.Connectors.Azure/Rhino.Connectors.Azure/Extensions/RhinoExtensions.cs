@@ -15,10 +15,11 @@ using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
-using Newtonsoft.Json;
+//using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
+using Rhino.Api.Converters;
 using Rhino.Api.Extensions;
 using Rhino.Connectors.Azure.Contracts;
 using Rhino.Connectors.Azure.Framework;
@@ -31,6 +32,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 
 namespace Rhino.Connectors.Azure.Extensions
 {
@@ -41,6 +43,18 @@ namespace Rhino.Connectors.Azure.Extensions
     {
         // constants
         private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
+        private static JsonSerializerOptions JsonOptions
+        {
+            get
+            {
+                var _options = new JsonSerializerOptions()
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+                _options.Converters.Add(new ExceptionConverter());
+                return _options;
+            }
+        }
 
         #region *** Test: Models   ***
         /// <summary>
@@ -193,7 +207,8 @@ namespace Rhino.Connectors.Azure.Extensions
             IEnumerable<IDictionary<string, object>> data)
         {
             // setup
-            var onStep = JsonConvert.SerializeObject(step);
+            var onContext = JsonSerializer.Serialize(step.Context, JsonOptions);
+            var onStep = $"[{JsonSerializer.Serialize(step, JsonOptions)},{onContext}]";
             var parameters = new List<(string Name, string Value)>();
 
             // iterate
@@ -455,7 +470,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // post create
             bug = CreateAttachmentsForBug(client, testCase, bug);
-            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonSerializer.Serialize(bug, JsonOptions);
 
             // link test results to bug
             if (testCaseResults.Any())
@@ -510,7 +525,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // upload new attachments
             bug = CreateAttachmentsForBug(client, testCase, bug);
-            testCase.Context[ContextEntry.BugOpened] = JsonConvert.SerializeObject(bug);
+            testCase.Context[ContextEntry.BugOpened] = JsonSerializer.Serialize(bug, JsonOptions);
 
             // link test results to bug
             if (!testCaseResults.Any())
