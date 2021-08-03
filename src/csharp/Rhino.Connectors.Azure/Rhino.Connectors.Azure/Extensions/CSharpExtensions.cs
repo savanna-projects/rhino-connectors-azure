@@ -3,6 +3,8 @@
  * 
  * RESOURCES
  */
+using Gravity.Extensions;
+
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -135,8 +137,13 @@ namespace Rhino.Connectors.Azure.Extensions
             // build
             try
             {
-                if (!typeof(IDictionary<string, object>).IsAssignableFrom(typeof(T)))
+                if (dictionary[key].GetType() == typeof(T))
                 {
+                    return (T)dictionary[key];
+                }
+                if(typeof(T) == typeof(string))
+                {
+                    dictionary[key] = $"{dictionary[key]}";
                     return (T)dictionary[key];
                 }
 
@@ -148,7 +155,7 @@ namespace Rhino.Connectors.Azure.Extensions
                     return (T)dictionary[key];
                 }
 
-                var json = JsonSerializer.Serialize(dictionary[key]);
+                var json = $"{dictionary[key]}";
                 return JsonSerializer.Deserialize<T>(json);
             }
             catch (Exception e) when (e != null)
