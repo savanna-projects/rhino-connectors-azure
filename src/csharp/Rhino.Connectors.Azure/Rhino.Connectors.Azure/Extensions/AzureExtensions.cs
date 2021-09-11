@@ -60,7 +60,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static T GetAzureCapability<T>(this RhinoConfiguration configuration, string capability, T defaultValue)
         {
             // setup
-            const string OptionsKey = Connector.AzureTestManager + ":options";
+            const string OptionsKey = RhinoConnectors.AzureTestManager + ":options";
             var options = configuration.Capabilities.Get(OptionsKey, new Dictionary<string, object>());
 
             // get
@@ -77,7 +77,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static void AddAzureCapability(this RhinoConfiguration configuration, string capability, object value)
         {
             // setup
-            const string OptionsKey = Connector.AzureTestManager + ":options";
+            const string OptionsKey = RhinoConnectors.AzureTestManager + ":options";
             var options = configuration.Capabilities.Get(OptionsKey, new Dictionary<string, object>());
 
             // put
@@ -369,7 +369,7 @@ namespace Rhino.Connectors.Azure.Extensions
             // setup
             var options = testCase
                 .Context
-                .Get($"{Connector.AzureTestManager}:options", new Dictionary<string, object>());
+                .Get($"{RhinoConnectors.AzureTestManager}:options", new Dictionary<string, object>());
 
             // initiate
             var data = new Dictionary<string, object>
@@ -1294,7 +1294,7 @@ namespace Rhino.Connectors.Azure.Extensions
         private static IDictionary<string, object> InvokeGetCustomFields(RhinoTestCase testCase)
         {
             // setup
-            const string OptionsKey = Connector.AzureTestManager + ":options";
+            const string OptionsKey = RhinoConnectors.AzureTestManager + ":options";
             var options = testCase.Context.Get(OptionsKey, new Dictionary<string, object>());
 
             // get

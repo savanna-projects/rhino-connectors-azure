@@ -24,7 +24,7 @@ namespace Rhino.Connectors.Azure
     /// Azure connector for running Test Manager tests as Rhino Automation Specs.
     /// </summary>
     [Connector(
-        value: Connector.AzureTestManager,
+        value: RhinoConnectors.AzureTestManager,
         Name = "Connector - Azure DevOps & Team Foundation Server (TFS)",
         Description = "Allows to execute Rhino Specs from Azure DevOps or Team Foundation Server Test Case work items and report back as Test Runs.")]
     public class AzureConnector : RhinoConnector
@@ -84,7 +84,7 @@ namespace Rhino.Connectors.Azure
         /// Performed just before each test is called.
         /// </summary>
         /// <param name="testCase">The Rhino.Api.Contracts.AutomationProvider.RhinoTestCase which is being executed.</param>
-        public override RhinoTestCase OnPreTestExecute(RhinoTestCase testCase)
+        public override RhinoTestCase OnTestSetup(RhinoTestCase testCase)
         {
             // setup
             testCase.Context[AzureContextEntry.Outcome] = nameof(TestOutcome.InProgress);
@@ -102,7 +102,7 @@ namespace Rhino.Connectors.Azure
         /// Performed just after each test is called.
         /// </summary>
         /// <param name="testCase">The Rhino.Api.Contracts.AutomationProvider.RhinoTestCase which was executed.</param>
-        public override RhinoTestCase OnPostTestExecute(RhinoTestCase testCase)
+        public override RhinoTestCase OnTestTeardown(RhinoTestCase testCase)
         {
             // setup
             var outcome = testCase.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
