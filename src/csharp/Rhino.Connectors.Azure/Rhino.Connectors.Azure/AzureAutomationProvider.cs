@@ -136,7 +136,7 @@ namespace Rhino.Connectors.Azure
         /// <param name="plugins">An existing collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</param>
         /// <returns>A collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</returns>
         /// <remarks>You can implement this method to load plugins from A.L.M or other source.</remarks>
-        public override (IEnumerable<RhinoPlugin> Rhino, IEnumerable<PluginAttribute> Gravity) OnGetPlugins(IEnumerable<RhinoPlugin> plugins)
+        public override (IEnumerable<RhinoPlugin> Rhino, IEnumerable<PluginAttribute> Gravity) OnGetPlugins()
         {
             //// setup
             //var wiql = new Wiql()
@@ -405,7 +405,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to create automation provider test case.</param>
         /// <returns>The ID of the newly created entity.</returns>
-        public override string CreateTestCase(RhinoTestCase testCase)
+        public override string OnCreateTestCase(RhinoTestCase testCase)
         {
             // setup
             var document = testCase.GetTestDocument(Operation.Add, "Automatically created by Rhino engine.");
@@ -472,7 +472,7 @@ namespace Rhino.Connectors.Azure
         /// Implements a mechanism of setting a testing configuration for an automation provider.
         /// </summary>
         /// <remarks>Use this method for <see cref="SetConfiguration"/> customization.</remarks>
-        public override void OnSetConfiguration()
+        public override void OnSetConfiguration(RhinoConfiguration configuration)
         {
             // setup
             const string ConfigurationName = "Rhino - Automation Configuration";
@@ -528,8 +528,8 @@ namespace Rhino.Connectors.Azure
             }
 
             // put to context
-            var configuration = GetConfiguration(id);
-            AddConfigurationToTestContext(configuration);
+            var _configuration = GetConfiguration(id);
+            AddConfigurationToTestContext(_configuration);
         }
 
         private Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.TestConfiguration GetConfiguration(int id)
@@ -740,7 +740,7 @@ namespace Rhino.Connectors.Azure
         private int GetFromOptions(string optionsEntry)
         {
             // setup
-            const string OptionsKey = Connector.AzureTestManager + ":options";
+            const string OptionsKey = RhinoConnectors.AzureTestManager + ":options";
             var azureOptions = CSharpExtensions.Get(Configuration.Capabilities, OptionsKey, new Dictionary<string, object>());
 
             // exit conditions
@@ -760,7 +760,7 @@ namespace Rhino.Connectors.Azure
         /// Completes automation provider test run results, if any were missed or bypassed.
         /// </summary>
         /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun results object to complete by.</param>
-        public override void OnCompleteTestRun(RhinoTestRun testRun)
+        public override void OnRunTeardown(RhinoTestRun testRun)
         {
             // setup
             _ = int.TryParse(testRun.Key, out int runIdOut);
@@ -1045,7 +1045,7 @@ namespace Rhino.Connectors.Azure
         /// Deletes one of more an automation provider test run entity.
         /// </summary>
         /// <param name="testRuns">A collection of Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.Key to delete by.</param>
-        public override void DeleteTestRun(params string[] testRuns)
+        public override void OnDeleteTestRun(params string[] testRuns)
         {
             // setup
             var ids = testRuns.Any(i => Regex.IsMatch(i, "(?i)all"))
