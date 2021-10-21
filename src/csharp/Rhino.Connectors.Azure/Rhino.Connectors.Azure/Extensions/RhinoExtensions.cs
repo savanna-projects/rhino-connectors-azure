@@ -15,8 +15,6 @@ using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
-//using Newtonsoft.Json;
-
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
 using Rhino.Api.Converters;
@@ -430,8 +428,8 @@ namespace Rhino.Connectors.Azure.Extensions
             var testNode = test.DocumentNode.SelectSingleNode(path);
 
             // build
-            var fromBug = bugNode == null ? string.Empty : bugNode.InnerText.Sort();
-            var fromTest = testNode == null ? string.Empty : testNode.InnerText.Sort();
+            var fromBug = bugNode == null ? string.Empty : bugNode.InnerText.Trim().Sort();
+            var fromTest = testNode == null ? string.Empty : testNode.InnerText.Trim().Sort();
 
             // get
             return fromBug.Equals(fromTest, StringComparison.OrdinalIgnoreCase);
