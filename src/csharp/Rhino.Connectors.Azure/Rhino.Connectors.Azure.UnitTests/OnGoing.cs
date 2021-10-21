@@ -19,14 +19,7 @@ namespace Rhino.Connectors.Azure.UnitTests
         [TestMethod]
         public void Test()
         {
-            var json = File.ReadAllText(@"D:\garbage\azure.txt");
-            var c = JsonSerializer.Deserialize<RhinoConfiguration>(json, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            var connector = new AzureConnector(c);
-            connector.ProviderManager.DeleteTestRun("all");
-            connector.Invoke();
+
         }
     }
 }
