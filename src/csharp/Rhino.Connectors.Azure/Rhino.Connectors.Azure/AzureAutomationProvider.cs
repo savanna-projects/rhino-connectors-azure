@@ -23,7 +23,6 @@ using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 
 using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 
 using Rhino.Api;
 using Rhino.Api.Contracts.AutomationProvider;
@@ -39,12 +38,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Net.Http;
+using System.Net;
 using System.Reflection;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+using GlobalSettings = Rhino.Connectors.Azure.Extensions.GlobalSettings;
 using TestPoint = Microsoft.TeamFoundation.TestManagement.WebApi.TestPoint;
 using Utilities = Rhino.Api.Extensions.Utilities;
 using WorkItem = Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models.WorkItem;
@@ -62,17 +61,17 @@ namespace Rhino.Connectors.Azure
         private const SuiteEntryTypes TestEntryType = SuiteEntryTypes.TestCase;
 
         // members: clients
-        private readonly WorkItemTrackingHttpClient itemManagement;
-        private readonly TestManagementHttpClient testManagement;
-        private readonly TestPlanHttpClient planManagement;
-        private readonly VssConnection connection;
-        private readonly TeamProjectReference projectReference;
+        private readonly WorkItemTrackingHttpClient _itemManagement;
+        private readonly TestManagementHttpClient _testManagement;
+        private readonly TestPlanHttpClient _planManagement;
+        private readonly VssConnection _connection;
+        private readonly TeamProjectReference _projectReference;
 
         // members
-        private readonly ILogger logger;
-        private readonly ParallelOptions options;
-        private readonly AzureBugsManager bugsManager;
-        private readonly string project;
+        private readonly ILogger _logger;
+        private readonly ParallelOptions _options;
+        private readonly AzureBugsManager _bugsManager;
+        private readonly string _project;
 
         #region *** Constructors      ***
         /// <summary>
@@ -102,32 +101,40 @@ namespace Rhino.Connectors.Azure
             : base(configuration, types, logger)
         {
             // setup
-            this.logger = logger;
             var credentials = configuration.GetVssCredentials();
-            connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
-            project = configuration.ConnectorConfiguration.Project;
-            bugsManager = new AzureBugsManager(configuration, logger);
+
+            _logger = logger;
+            _connection = new VssConnection(new Uri(configuration.ConnectorConfiguration.Collection), credentials);
+            _project = configuration.ConnectorConfiguration.Project;
+            _bugsManager = new AzureBugsManager(configuration, logger);
+            _options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
+
             BucketSize = configuration.GetCapability(ProviderCapability.BucketSize, 15);
             Configuration.Capabilities ??= new Dictionary<string, object>();
-            options = new ParallelOptions { MaxDegreeOfParallelism = BucketSize };
+
+            // allow service points
+            ServicePointManager.SecurityProtocol =
+                SecurityProtocolType.Tls |
+                SecurityProtocolType.Tls11 |
+                SecurityProtocolType.Tls12 |
+                SecurityProtocolType.Tls13;
+            ServicePointManager.ServerCertificateValidationCallback += (_, _, _, _) => true;
 
             // cache project
-            var projectManagement = connection.GetClient<ProjectHttpClient>();
-            projectReference = projectManagement.GetProjects(ProjectState.All)
-                .GetAwaiter()
-                .GetResult()
-                .FirstOrDefault(i => i.Name.Equals(Configuration.ConnectorConfiguration.Project, StringComparison.OrdinalIgnoreCase));
-            TestRun.Context[AzureContextEntry.Project] = projectReference;
+            var projectManagement = _connection.GetClient<ProjectHttpClient>(GlobalSettings.ClientNumberOfAttempts);
+            _projectReference = projectManagement.GetProjects(GlobalSettings.ClientNumberOfAttempts)
+                .FirstOrDefault(i => i.Name.Equals(_project, StringComparison.OrdinalIgnoreCase));
+            TestRun.Context[AzureContextEntry.Project] = _projectReference;
 
             // create clients
-            itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
-            testManagement = connection.GetClient<TestManagementHttpClient>();
-            planManagement = connection.GetClient<TestPlanHttpClient>();
+            _itemManagement = _connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
+            _testManagement = _connection.GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts);
+            _planManagement = _connection.GetClient<TestPlanHttpClient>(GlobalSettings.ClientNumberOfAttempts);
         }
         #endregion
 
         // TODO: implement getting plugins from ALM (shared Steps)
-        //       1. break Invokewn all sub method into extensions
+        //       1. break Invoke on all sub method into extensions
         //       2. get description from work item to add as meta data
         #region *** Plugins           ***
         /// <summary>
@@ -186,7 +193,7 @@ namespace Rhino.Connectors.Azure
             // exit conditions
             if (!methods.Any())
             {
-                logger?.Warn("Get-TestCases = MethodsNotFound");
+                _logger?.Warn("Get-TestCases = MethodsNotFound");
                 return Array.Empty<RhinoTestCase>();
             }
 
@@ -204,12 +211,17 @@ namespace Rhino.Connectors.Azure
                 .Distinct();
             if (invalidTestCases.Any())
             {
-                logger?.Warn($"Get-TestCases -Invalid = {JsonConvert.SerializeObject(invalidTestCases)}");
+                _logger?.Warn($"Get-TestCases -Invalid = {JsonConvert.SerializeObject(invalidTestCases)}");
             }
 
+            // TODO: replace by .NET6.0 distinct by
             // log
-            var distinctTestCases = testCases.DistinctBy(i => i.Key).Where(i => !invalidTestCases.Contains(i.Key)).ToList();
-            logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
+            var distinctTestCases = Gravity
+                .Extensions
+                .CollectionExtensions
+                .DistinctBy(testCases, (i) => i.Key)
+                .Where(i => !invalidTestCases.Contains(i.Key)).ToList();
+            _logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
 
             // get
             return distinctTestCases.Select(i => i.AddToContext(CapabilitesKey, Configuration.Capabilities));
@@ -226,11 +238,11 @@ namespace Rhino.Connectors.Azure
             }
             catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
             {
-                logger?.Warn("Get-TestCases = NotSupported");
+                _logger?.Warn("Get-TestCases = NotSupported");
             }
             catch (Exception e) when (e != null)
             {
-                logger?.Error($"Get-TestCases = {e.GetBaseException().Message}");
+                _logger?.Error($"Get-TestCases = {e.GetBaseException().Message}");
             }
             return testCases;
         }
@@ -247,7 +259,7 @@ namespace Rhino.Connectors.Azure
             itemsToFind = GetTestCases(ids: itemsToFind).Select(i => i.Id.ToInt());
 
             // get
-            return itemManagement.GetRhinoTestCases(ids: itemsToFind);
+            return _itemManagement.GetRhinoTestCases(ids: itemsToFind);
         }
 
         [Description(GetTestCasesMethod)]
@@ -260,10 +272,10 @@ namespace Rhino.Connectors.Azure
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
 
             // get: all test cases ids
-            Parallel.ForEach(itemsToFind, options, id =>
+            Parallel.ForEach(itemsToFind, _options, id =>
             {
-                var range = planManagement
-                    .GetSuiteEntriesAsync(project, id, TestEntryType)
+                var range = _planManagement
+                    .GetSuiteEntriesAsync(_project, id, TestEntryType)
                     .GetAwaiter()
                     .GetResult()
                     .Where(i => i.SuiteEntryType == TestEntryType)
@@ -274,10 +286,10 @@ namespace Rhino.Connectors.Azure
 
             // get: rhino test cases
             var groups = testCases.Split(100);
-            Parallel.ForEach(groups, options, group =>
+            Parallel.ForEach(groups, _options, group =>
             {
                 var items = GetTestCases(group).Select(i => i.Id.ToInt());
-                var range = itemManagement.GetRhinoTestCases(ids: items);
+                var range = _itemManagement.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -296,28 +308,28 @@ namespace Rhino.Connectors.Azure
             var testCasesResults = new ConcurrentBag<RhinoTestCase>();
 
             // get: suites and plans
-            Parallel.ForEach(itemsToFind, options, id =>
+            Parallel.ForEach(itemsToFind, _options, id =>
             {
                 try
                 {
-                    var testSuites = planManagement.GetTestSuitesForPlanWithContinuationTokenAsync(project, id).GetAwaiter().GetResult();
+                    var testSuites = _planManagement.GetTestSuitesForPlanWithContinuationTokenAsync(_project, id).GetAwaiter().GetResult();
                     var suites = testSuites.Select(i => i.Id);
                     suitesByPlans.Add((Plan: id, Suites: suites));
                 }
                 catch (TestObjectNotFoundException)
                 {
-                    logger?.Debug($"Get-ByTestPlans -Plan {id} = NotFound");
+                    _logger?.Debug($"Get-ByTestPlans -Plan {id} = NotFound");
                 }
             });
-            logger?.Debug($"Get-ByTestPlans -Plan = {suitesByPlans.Count}");
-            logger?.Debug($"Get-ByTestPlans -Suite = {suitesByPlans.SelectMany(i => i.Suites).Count()}");
+            _logger?.Debug($"Get-ByTestPlans -Plan = {suitesByPlans.Count}");
+            _logger?.Debug($"Get-ByTestPlans -Suite = {suitesByPlans.SelectMany(i => i.Suites).Count()}");
 
             // get: rhino test cases
-            Parallel.ForEach(suitesByPlans, options, suiteByPlan =>
+            Parallel.ForEach(suitesByPlans, _options, suiteByPlan =>
             {
-                Parallel.ForEach(suiteByPlan.Suites, options, suite =>
+                Parallel.ForEach(suiteByPlan.Suites, _options, suite =>
                 {
-                    var onTestCases = testManagement.GetTestCasesAsync(project, suiteByPlan.Plan, suite).GetAwaiter().GetResult();
+                    var onTestCases = _testManagement.GetTestCasesAsync(_project, suiteByPlan.Plan, suite).GetAwaiter().GetResult();
                     var range = onTestCases.Select(i => i.Workitem.Id);
                     testCases.AddRange(range);
                 });
@@ -325,14 +337,14 @@ namespace Rhino.Connectors.Azure
 
             // setup > log
             itemsToFind = testCases.ToNumbers();
-            logger?.Debug($"Get-ByTestPlans -TestCase = {itemsToFind.Count()}");
+            _logger?.Debug($"Get-ByTestPlans -TestCase = {itemsToFind.Count()}");
 
             // get: rhino test cases
             var groups = itemsToFind.Split(100);
-            Parallel.ForEach(groups, options, group =>
+            Parallel.ForEach(groups, _options, group =>
             {
                 var items = GetTestCases(group).Select(i => i.Id.ToInt());
-                var range = itemManagement.GetRhinoTestCases(ids: items);
+                var range = _itemManagement.GetRhinoTestCases(ids: items);
                 testCasesResults.AddRange(range);
             });
 
@@ -348,7 +360,7 @@ namespace Rhino.Connectors.Azure
             var testCases = new ConcurrentBag<int>();
 
             // get: suites and plans
-            Parallel.ForEach(queries, options, query =>
+            Parallel.ForEach(queries, _options, query =>
             {
                 try
                 {
@@ -356,25 +368,25 @@ namespace Rhino.Connectors.Azure
                     var wiql = new Wiql() { Query = query };
 
                     var queryResults = isGuid
-                        ? itemManagement.QueryByIdAsync(project, queryOut).GetAwaiter().GetResult()
-                        : itemManagement.QueryByWiqlAsync(wiql, project).GetAwaiter().GetResult();
+                        ? _itemManagement.QueryByIdAsync(_project, queryOut).GetAwaiter().GetResult()
+                        : _itemManagement.QueryByWiqlAsync(wiql, _project).GetAwaiter().GetResult();
 
                     var range = queryResults.WorkItems.Select(i => i.Id);
                     testCases.AddRange(range);
                 }
                 catch (VssServiceException e)
                 {
-                    logger?.Debug($"Get-ByQueries -Query {query} = {e.Message}");
+                    _logger?.Debug($"Get-ByQueries -Query {query} = {e.Message}");
                 }
             });
 
             // setup > log
             var itemsToFind = testCases.ToList();
-            logger?.Debug($"Get-ByQueries = {itemsToFind.Count}");
+            _logger?.Debug($"Get-ByQueries = {itemsToFind.Count}");
 
             // get
             var items = GetTestCases(testCases).Select(i => i.Id.ToInt());
-            return itemManagement.GetRhinoTestCases(ids: items);
+            return _itemManagement.GetRhinoTestCases(ids: items);
         }
 
         // get test cases by id
@@ -382,7 +394,7 @@ namespace Rhino.Connectors.Azure
         {
             try
             {
-                return itemManagement
+                return _itemManagement
                     .GetWorkItemsAsync(ids, fields: null, asOf: null, expand: WorkItemExpand.All)
                     .GetAwaiter()
                     .GetResult()
@@ -391,7 +403,7 @@ namespace Rhino.Connectors.Azure
             }
             catch (Exception e)
             {
-                logger?.Error(e.Message, e);
+                _logger?.Error(e.Message, e);
                 return Array.Empty<WorkItem>();
             }
         }
@@ -411,7 +423,7 @@ namespace Rhino.Connectors.Azure
             var document = testCase.GetTestDocument(Operation.Add, "Automatically created by Rhino engine.");
 
             // post
-            var item = itemManagement
+            var item = _itemManagement
                 .CreateWorkItemAsync(document, Configuration.ConnectorConfiguration.Project, TestCase)
                 .GetAwaiter()
                 .GetResult();
@@ -440,26 +452,26 @@ namespace Rhino.Connectors.Azure
         private void AddTestToSuite(int testPlan, int testSuite, string testCase)
         {
             // setup
-            testPlan = testPlan <= 0 ? planManagement.GetPlanForSuite(project, testSuite) : 0;
-            logger?.Debug($"Get-PlanForSuite -Project {project} -TestSuite {testSuite} = {testPlan}");
+            testPlan = testPlan <= 0 ? _planManagement.GetPlanForSuite(_project, testSuite) : 0;
+            _logger?.Debug($"Get-PlanForSuite -Project {_project} -TestSuite {testSuite} = {testPlan}");
 
             // put
             try
             {
-                testManagement
-                    .AddTestCasesToSuiteAsync(project, testPlan, testSuite, testCase)
+                _testManagement
+                    .AddTestCasesToSuiteAsync(_project, testPlan, testSuite, testCase)
                     .GetAwaiter()
                     .GetResult();
 
-                logger?.Debug("Add-TestToSuite" +
-                    $"-Project {project} " +
+                _logger?.Debug("Add-TestToSuite" +
+                    $"-Project {_project} " +
                     $"-TestPlan {testPlan} " +
                     $"-TestSuite {testSuite} " +
                     $"-TestCase {testCase} = OK");
             }
             catch (Exception e)
             {
-                logger?.Error("Add-TestToSuite " +
+                _logger?.Error("Add-TestToSuite " +
                     $"-TestPlan {testPlan} " +
                     $"-TestSuite {testSuite} " +
                     $"-TestCase {testCase} = {e.GetBaseException().Message}");
@@ -488,7 +500,7 @@ namespace Rhino.Connectors.Azure
             // get or create
             try
             {
-                var testConfiguration = planManagement
+                var testConfiguration = _planManagement
                     .GetTestConfigurationsWithContinuationTokenAsync(Configuration.ConnectorConfiguration.Project)
                     .GetAwaiter()
                     .GetResult()
@@ -508,23 +520,23 @@ namespace Rhino.Connectors.Azure
                     State = TestConfigurationState.Active,
                     Name = ConfigurationName
                 };
-                testConfiguration = planManagement
+                testConfiguration = _planManagement
                     .CreateTestConfigurationAsync(parameters, Configuration.ConnectorConfiguration.Project)
                     .GetAwaiter()
                     .GetResult();
 
-                logger?.Debug($"Set-Configuration -Name {ConfigurationName} -Create = {testConfiguration.Id}");
+                _logger?.Debug($"Set-Configuration -Name {ConfigurationName} -Create = {testConfiguration.Id}");
                 TestRun.Context[AzureContextEntry.TestConfiguration] = testConfiguration;
 
                 id = testConfiguration.Id;
             }
             catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
             {
-                logger?.Warn($"Set-Configuration -Name {ConfigurationName} = NotSupported");
+                _logger?.Warn($"Set-Configuration -Name {ConfigurationName} = NotSupported");
             }
             catch (Exception e) when (e != null)
             {
-                logger?.Error($"Set-Configuration -Name {ConfigurationName} = {e.GetBaseException().Message}");
+                _logger?.Error($"Set-Configuration -Name {ConfigurationName} = {e.GetBaseException().Message}");
             }
 
             // put to context
@@ -536,11 +548,11 @@ namespace Rhino.Connectors.Azure
         {
             try
             {
-                return planManagement.GetTestConfigurationByIdAsync(project, id).GetAwaiter().GetResult();
+                return _planManagement.GetTestConfigurationByIdAsync(_project, id).GetAwaiter().GetResult();
             }
             catch (Exception e) when (e != null)
             {
-                logger?.Warn($"Get-Configuration -Server {connection.Uri} -Project {project} = NotSupported");
+                _logger?.Warn($"Get-Configuration -Server {_connection.Uri} -Project {_project} = NotSupported");
             }
             return default;
         }
@@ -557,11 +569,11 @@ namespace Rhino.Connectors.Azure
             // set
             if (id != -1)
             {
-                logger?.Debug($"Get-Configuration -FromCapabilites {id} = OK");
+                _logger?.Debug($"Get-Configuration -FromCapabilites {id} = OK");
             }
             else
             {
-                logger?.Debug($"Set-Configuration -Default {id} = OK");
+                _logger?.Debug($"Set-Configuration -Default {id} = OK");
             }
 
             // get
@@ -604,7 +616,7 @@ namespace Rhino.Connectors.Azure
                 var azureTestRun = InvokeCreateTestRun(testRun);
 
                 // 2. Get Created Run
-                var testCaseResults = azureTestRun.GetTestRunResults(testManagement);
+                var testCaseResults = azureTestRun.GetTestRunResults(_testManagement);
 
                 // 3. Add Iterations                
                 foreach (var testCaseResult in testCaseResults)
@@ -614,18 +626,18 @@ namespace Rhino.Connectors.Azure
                     testCaseResult.IterationDetails.AddRange(iterationDetails);
                 }
 
-                testManagement
-                    .UpdateTestResultsAsync(testCaseResults.ToArray(), project, azureTestRun.Id)
+                _testManagement
+                    .UpdateTestResultsAsync(testCaseResults.ToArray(), _project, azureTestRun.Id)
                     .GetAwaiter()
                     .GetResult();
 
                 // 5. log
-                logger?.Debug($"Create-TestRun = {azureTestRun.Url}");
+                _logger?.Debug($"Create-TestRun = {azureTestRun.Url}");
             }
             catch (Exception e) when (e != null)
             {
                 Configuration.ConnectorConfiguration.DryRun = true;
-                logger?.Error($"Create-TestRun = {e.GetBaseException().Message}");
+                _logger?.Error($"Create-TestRun = {e.GetBaseException().Message}");
             }
 
             // get
@@ -638,7 +650,7 @@ namespace Rhino.Connectors.Azure
             var runCreateModel = GetCreateModel();
 
             // create
-            var onTestRun = testManagement
+            var onTestRun = _testManagement
                 .CreateTestRunAsync(runCreateModel, Configuration.ConnectorConfiguration.Project)
                 .GetAwaiter()
                 .GetResult();
@@ -660,9 +672,9 @@ namespace Rhino.Connectors.Azure
             try
             {
                 // setup
-                plan = plan == -1 ? planManagement.GetPlanForTest(project, testCaseId) : plan;
+                plan = plan == -1 ? _planManagement.GetPlanForTest(_project, testCaseId) : plan;
                 Configuration.AddAzureCapability(AzureCapability.TestPlan, plan);
-                logger?.Debug($"Get-PlanForTest -Project {project} -TestCase {testCaseId} = {plan}");
+                _logger?.Debug($"Get-PlanForTest -Project {_project} -TestCase {testCaseId} = {plan}");
 
                 //  test points
                 var points = GetAllTestPoints().Select(i => i.Id).ToArray();
@@ -673,7 +685,7 @@ namespace Rhino.Connectors.Azure
             catch (Exception e) when (e != null)
             {
                 var message = $"Get-CreateModel -Plan {plan} = {e.GetBaseException().Message}";
-                logger.Fatal(message, e);
+                _logger.Fatal(message, e);
                 throw new InvalidOperationException(message, innerException: e);
             }
         }
@@ -685,20 +697,20 @@ namespace Rhino.Connectors.Azure
             var testPoints = new ConcurrentBag<TestPoint>();
 
             // build
-            Parallel.ForEach(testCasesGroups, options, testCases =>
+            Parallel.ForEach(testCasesGroups, _options, testCases =>
             {
                 var ids = testCases.Select(i => i.Key).Distinct().AsNumbers().ToList();
                 var filter = new PointsFilter { TestcaseIds = ids };
                 var query = new TestPointsQuery() { PointsFilter = filter };
 
-                var range = testManagement.GetPointsByQueryAsync(query, project).GetAwaiter().GetResult().Points;
+                var range = _testManagement.GetPointsByQueryAsync(query, _project).GetAwaiter().GetResult().Points;
                 range = ValidatePoints(range).ToList();
 
                 testPoints.AddRange(range);
             });
 
             // get
-            logger?.Debug($"Get-AllTestPoints = {testPoints.Count}");
+            _logger?.Debug($"Get-AllTestPoints = {testPoints.Count}");
             return testPoints;
         }
 
@@ -711,15 +723,15 @@ namespace Rhino.Connectors.Azure
             var testPointsResults = new ConcurrentBag<TestPoint>();
 
             // build
-            Parallel.ForEach(testPoints, options, testPoint =>
+            Parallel.ForEach(testPoints, _options, testPoint =>
             {
                 var onTestSuite = Regex.Match(testPoint.Url, pattern: @"(?<=Suites/)\d+").Value;
                 _ = int.TryParse(onTestSuite, out int testSuite);
 
                 try
                 {
-                    var point = testManagement
-                         .GetPointAsync(project, testPlan, testSuite, testPoint.Id)
+                    var point = _testManagement
+                         .GetPointAsync(_project, testPlan, testSuite, testPoint.Id)
                          .GetAwaiter()
                          .GetResult();
                     if (!isTestSuiteProvided || testSuiteOption == testSuite)
@@ -729,7 +741,7 @@ namespace Rhino.Connectors.Azure
                 }
                 catch (Exception e) when (e != null)
                 {
-                    logger?.Debug($"Confirm-TestPoint -Id {testPoint.Id} = {e.Message}");
+                    _logger?.Debug($"Confirm-TestPoint -Id {testPoint.Id} = {e.Message}");
                 }
             });
 
@@ -767,8 +779,8 @@ namespace Rhino.Connectors.Azure
             var model = new RunUpdateModel(state: nameof(TestRunState.Completed));
 
             // get test results
-            var azureTestRun = testManagement.GetTestRunByIdAsync(project, testRun.Key.ToInt()).GetAwaiter().GetResult();
-            var runResults = azureTestRun.GetTestRunResults(testManagement).Where(i => i.State != nameof(TestRunState.Completed)).ToList();
+            var azureTestRun = _testManagement.GetTestRunByIdAsync(_project, testRun.Key.ToInt()).GetAwaiter().GetResult();
+            var runResults = azureTestRun.GetTestRunResults(_testManagement).Where(i => i.State != nameof(TestRunState.Completed)).ToList();
 
             // setup conditions
             var isRunResultsOk = runResults.Count == 0;
@@ -781,7 +793,7 @@ namespace Rhino.Connectors.Azure
             }
             if (isRunResultsOk && !isRunStateOk)
             {
-                testManagement.UpdateTestRunAsync(model, project, azureTestRun.Id).GetAwaiter().GetResult();
+                _testManagement.UpdateTestRunAsync(model, _project, azureTestRun.Id).GetAwaiter().GetResult();
                 return;
             }
 
@@ -797,16 +809,16 @@ namespace Rhino.Connectors.Azure
             }
 
             // put
-            testManagement.UpdateTestResultsAsync(results.ToArray(), project, runIdOut).GetAwaiter().GetResult();
+            _testManagement.UpdateTestResultsAsync(results.ToArray(), _project, runIdOut).GetAwaiter().GetResult();
 
             // setup
-            azureTestRun = testManagement.GetTestRunByIdAsync(project, testRun.Key.ToInt()).GetAwaiter().GetResult();
+            azureTestRun = _testManagement.GetTestRunByIdAsync(_project, testRun.Key.ToInt()).GetAwaiter().GetResult();
             isRunStateOk = azureTestRun.State == nameof(TestRunState.Completed);
 
             // put
             if (!isRunStateOk)
             {
-                testManagement.UpdateTestRunAsync(model, project, azureTestRun.Id).GetAwaiter().GetResult();
+                _testManagement.UpdateTestRunAsync(model, _project, azureTestRun.Id).GetAwaiter().GetResult();
             }
         }
 
@@ -860,7 +872,7 @@ namespace Rhino.Connectors.Azure
             // exit conditions
             if (!results.Any())
             {
-                logger?.Debug($"Update-TestResults -Test {testCase.Key} = NotFound");
+                _logger?.Debug($"Update-TestResults -Test {testCase.Key} = NotFound");
                 return;
             }
 
@@ -891,11 +903,11 @@ namespace Rhino.Connectors.Azure
             }
 
             // update
-            testManagement
-                .UpdateTestResultsAsync(onResults.ToArray(), project, int.Parse(testCase.TestRunKey))
+            _testManagement
+                .UpdateTestResultsAsync(onResults.ToArray(), _project, int.Parse(testCase.TestRunKey))
                 .GetAwaiter()
                 .GetResult();
-            logger?.Debug($"Update-TestResults -Test {testCase.Key} = (Ok, {onResults.Count})");
+            _logger?.Debug($"Update-TestResults -Test {testCase.Key} = (Ok, {onResults.Count})");
         }
 
         private IEnumerable<TestCaseResult> GetTestCaseResult(RhinoTestCase testCase)
@@ -904,7 +916,7 @@ namespace Rhino.Connectors.Azure
             _ = int.TryParse(testCase.TestRunKey, out int runIdOut);
 
             // get test results
-            var partialResults = testManagement.GetTestResultsAsync(project, runIdOut)
+            var partialResults = _testManagement.GetTestResultsAsync(_project, runIdOut)
                 .GetAwaiter()
                 .GetResult()
                 .Where(i => i.TestCase.Id.Equals(testCase.Key));
@@ -912,19 +924,20 @@ namespace Rhino.Connectors.Azure
             // exit conditions
             if (partialResults?.Any() == false)
             {
-                logger?.Debug($"Get-TestResults -TestCase {testCase.Key} = NotFound");
+                _logger?.Debug($"Get-TestResults -TestCase {testCase.Key} = NotFound");
                 return default;
             }
 
             // context
             testCase.Context[AzureContextEntry.TestResultId] = partialResults;
+            partialResults ??= Array.Empty<TestCaseResult>();
 
             // get iterations results
             var results = new ConcurrentBag<TestCaseResult>();
             foreach (var partialResult in partialResults)
             {
-                var fullResult = testManagement
-                    .GetTestResultByIdAsync(project, testCase.TestRunKey.ToInt(), partialResult.Id, ResultDetails.Iterations)
+                var fullResult = _testManagement
+                    .GetTestResultByIdAsync(_project, testCase.TestRunKey.ToInt(), partialResult.Id, ResultDetails.Iterations)
                     .GetAwaiter()
                     .GetResult();
                 results.Add(fullResult);
@@ -973,8 +986,8 @@ namespace Rhino.Connectors.Azure
 
             // setup
             _ = int.TryParse(TestRun.Key, out int runId);
-            var partialResults = testManagement
-                .GetTestResultsAsync(project, runId)
+            var partialResults = _testManagement
+                .GetTestResultsAsync(_project, runId)
                 .GetAwaiter()
                 .GetResult()
                 .Where(i => i.TestCase.Id.Equals(testCase.Key));
@@ -982,8 +995,8 @@ namespace Rhino.Connectors.Azure
             var testCaseResults = new List<TestCaseResult>();
             foreach (var partialResult in partialResults)
             {
-                var result = testManagement
-                    .GetTestResultByIdAsync(project, runId, partialResult.Id, ResultDetails.Iterations)
+                var result = _testManagement
+                    .GetTestResultByIdAsync(_project, runId, partialResult.Id, ResultDetails.Iterations)
                     .GetAwaiter()
                     .GetResult();
                 testCaseResults.Add(result);
@@ -991,52 +1004,22 @@ namespace Rhino.Connectors.Azure
 
             // setup
             var attachments = testCase.Steps.SelectMany(i => i.GetAttachments()).ToList();
+            var createModels = testCaseResults.SelectMany(test => attachments.Select(attachment => new TestAttachmentCreateModel
+            {
+                Project = _projectReference.Id,
+                RequestModel = attachment,
+                TestIteration = testCase.Iteration + 1,
+                TestResult = test.Id,
+                TestRun = runId,
+            }));
 
             // post
-            foreach (var testCaseResult in testCaseResults)
+            foreach (var item in createModels)
             {
-                UploadAttachments(attachments, runId, testCaseResult.Id, testCase.Iteration + 1);
+                _testManagement.CreateAttachment(item, GlobalSettings.ClientNumberOfAttempts);
             }
-        }
-
-        private void UploadAttachments(IEnumerable<TestAttachmentRequestModel> attachments, int runId, int resultId, int iteration)
-        {
-            // setup
-            var route = $"{projectReference.Id}/_apis/test/Runs/{runId}/Results/{resultId}/Attachments" +
-                $"?iterationId={iteration}" +
-                "&api-version=5.0-preview.1";
-            var jsonSettings = new JsonSerializerSettings
-            {
-                ContractResolver = new CamelCasePropertyNamesContractResolver()
-            };
-
-            // upload
-            Parallel.ForEach(attachments, options, attachment =>
-            {
-                try
-                {
-                    var content = JsonConvert.SerializeObject(attachment, jsonSettings);
-                    var stringContent = new StringContent(content, Encoding.UTF8, "application/json");
-                    var response = testManagement.HttpClient.PostAsync(route, stringContent).GetAwaiter().GetResult();
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        logger?.Warn("Add-Attachment" +
-                            $" -File {attachment.FileName}" +
-                            $" -Run {runId}" +
-                            $" -Result {resultId}" +
-                            $" -Iteration {iteration} = ({response.StatusCode}; {response.ReasonPhrase})");
-                    }
-                }
-                catch (Exception e) when (e != null)
-                {
-                    logger?.Error("Add-Attachment" +
-                        $"-File {attachment.FileName}" +
-                        $"-Run {runId}" +
-                        $"-Result {resultId}" +
-                        $"-Iteration {iteration} = {e.Message}");
-                }
-            });
+            //Parallel.ForEach(createModels, _options, createModel
+            //    => _testManagement.CreateAttachment(createModel, GlobalSettings.ClientNumberOfAttempts));
         }
         #endregion
 
@@ -1049,19 +1032,19 @@ namespace Rhino.Connectors.Azure
         {
             // setup
             var ids = testRuns.Any(i => Regex.IsMatch(i, "(?i)all"))
-                ? testManagement.GetTestRunsAsync(project).GetAwaiter().GetResult().Select(i => i.Id)
+                ? _testManagement.GetTestRunsAsync(_project).GetAwaiter().GetResult().Select(i => i.Id)
                 : testRuns.AsNumbers();
 
             // iterate
-            Parallel.ForEach(ids, options, id =>
+            Parallel.ForEach(ids, _options, id =>
             {
                 try
                 {
-                    testManagement.DeleteTestRunAsync(project, id).GetAwaiter().GetResult();
+                    _testManagement.DeleteTestRunAsync(_project, id).GetAwaiter().GetResult();
                 }
                 catch (Exception e) when (e != null)
                 {
-                    logger?.Debug($"Delete-TestRun -Run {id} = {e.Message}");
+                    _logger?.Debug($"Delete-TestRun -Run {id} = {e.Message}");
                 }
             });
         }
@@ -1075,7 +1058,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
         public override IEnumerable<string> OnGetBugs(RhinoTestCase testCase)
         {
-            return bugsManager.GetBugs(testCase);
+            return _bugsManager.GetBugs(testCase);
         }
 
         /// <summary>
@@ -1085,7 +1068,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>An open bug.</returns>
         public override string OnGetOpenBug(RhinoTestCase testCase)
         {
-            return bugsManager.GetOpenBug(testCase);
+            return _bugsManager.GetOpenBug(testCase);
         }
 
         /// <summary>
@@ -1095,7 +1078,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>The ID of the newly created entity.</returns>
         public override string OnCreateBug(RhinoTestCase testCase)
         {
-            return bugsManager.OnCreateBug(testCase);
+            return _bugsManager.OnCreateBug(testCase);
         }
 
         /// <summary>
@@ -1105,7 +1088,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>The updated bug.</returns>
         public override string OnUpdateBug(RhinoTestCase testCase)
         {
-            return bugsManager.OnUpdateBug(testCase);
+            return _bugsManager.OnUpdateBug(testCase);
         }
 
         /// <summary>
@@ -1115,7 +1098,7 @@ namespace Rhino.Connectors.Azure
         /// <returns>A collection of updated bugs.</returns>
         public override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
-            return bugsManager.OnCloseBugs(testCase);
+            return _bugsManager.OnCloseBugs(testCase);
         }
 
         /// <summary>
@@ -1126,7 +1109,7 @@ namespace Rhino.Connectors.Azure
         public override string OnCloseBug(RhinoTestCase testCase)
         {
             // setup
-            var closedBugs = bugsManager.OnCloseBugs(testCase);
+            var closedBugs = _bugsManager.OnCloseBugs(testCase);
 
             // get
             return JsonConvert.SerializeObject(closedBugs);

@@ -3,6 +3,9 @@
  * 
  * RESOURCES
  */
+using Microsoft.TeamFoundation.TestManagement.WebApi;
+
+using System;
 using System.IO;
 
 namespace Rhino.Connectors.Azure.Contracts
@@ -56,5 +59,49 @@ namespace Rhino.Connectors.Azure.Contracts
         /// Gets or sets the step action ID.
         /// </summary>
         public string ActionRuntime { get; set; }
+
+        /// <summary>
+        /// Gets a <see cref="TestAttachmentRequestModel"/> based on this Attachment.
+        /// </summary>
+        /// <returns>A <see cref="TestAttachmentRequestModel"/>.</returns>
+        public TestAttachmentRequestModel GetAttachmentRequestModel()
+        {
+            return GetAttachmentRequestModel("Automatically created by Rhino Engine", UploadStream, Type, Name);
+        }
+
+        /// <summary>
+        /// Gets a <see cref="TestAttachmentRequestModel"/> based on this Attachment.
+        /// </summary>
+        /// <param name="comment">A comment to add when uploading the attachment.</param>
+        /// <returns>A <see cref="TestAttachmentRequestModel"/>.</returns>
+        public TestAttachmentRequestModel GetAttachmentRequestModel(string comment)
+        {
+            return GetAttachmentRequestModel(comment, UploadStream, Type, Name);
+        }
+
+        private static TestAttachmentRequestModel GetAttachmentRequestModel(
+            string comment,
+            Stream uploadStream,
+            string type,
+            string name)
+        {
+            // setup
+            byte[] bytes;
+            using (var memoryStream = new MemoryStream())
+            {
+                uploadStream.CopyTo(memoryStream);
+                bytes = memoryStream.ToArray();
+            }
+            string base64 = Convert.ToBase64String(bytes);
+
+            // get
+            return new TestAttachmentRequestModel
+            {
+                AttachmentType = type,
+                Comment = comment,
+                FileName = name,
+                Stream = base64
+            };
+        }
     }
 }
