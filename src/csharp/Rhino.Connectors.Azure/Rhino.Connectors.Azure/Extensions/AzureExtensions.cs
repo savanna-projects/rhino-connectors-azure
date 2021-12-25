@@ -9,6 +9,7 @@ using Gravity.Services.DataContracts;
 
 using HtmlAgilityPack;
 
+using Microsoft.TeamFoundation.Core.WebApi;
 using Microsoft.TeamFoundation.TestManagement.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi;
 using Microsoft.TeamFoundation.WorkItemTracking.WebApi.Models;
@@ -16,6 +17,8 @@ using Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi;
 using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
+
+using Newtonsoft.Json;
 
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
@@ -26,11 +29,15 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
@@ -48,7 +55,7 @@ namespace Rhino.Connectors.Azure.Extensions
         private const SuiteEntryTypes TestEntryType = SuiteEntryTypes.TestCase;
         private const StringComparison Compare = StringComparison.OrdinalIgnoreCase;
 
-        #region *** Configuration    ***
+        #region *** Configuration       ***
         /// <summary>
         /// Gets a value from connector_azure:options dictionary under RhinoConfiguration.Capabilites.
         /// </summary>
@@ -86,7 +93,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Rhino Test Case  ***
+        #region *** Rhino Test Case     ***
         // *** Bugs ***
         /// <summary>
         /// A collection of <see cref="WorkItem"/> for all open bugs.
@@ -108,7 +115,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static IEnumerable<WorkItem> GetOpenBugs(this RhinoTestCase testCase, VssConnection connection)
         {
             // setup
-            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var client = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // get
             return InvokeGetOpenBugs(testCase, client);
@@ -155,7 +162,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
                 // build
                 item = connection
-                    .GetClient<WorkItemTrackingHttpClient>()
+                    .GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts)
                     .GetWorkItemAsync(project, id: idOut, fields: null, expand: WorkItemExpand.All)
                     .GetAwaiter()
                     .GetResult();
@@ -187,7 +194,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 }
 
                 // build
-                var client = connection.GetClient<TestManagementHttpClient>();
+                var client = connection.GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts);
                 var project = InvokeGetProjectName(testCase);
 
                 // build
@@ -288,7 +295,7 @@ namespace Rhino.Connectors.Azure.Extensions
         /// Gets a <see cref="JsonPatchDocument"/> for creating a bug <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a bug by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
         /// <param name="comment">Comment to add when creating the bug.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetBugDocument(this RhinoTestCase testCase, Operation operation, string comment)
@@ -304,8 +311,8 @@ namespace Rhino.Connectors.Azure.Extensions
         /// Gets a <see cref="JsonPatchDocument"/> for creating a bug <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a bug by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
-        /// <param name="customFields">A collection of static custom fields to apply when creating the Invokecument.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the document.</param>
+        /// <param name="customFields">A collection of static custom fields to apply when creating the document.</param>
         /// <param name="comment">Comment to add when creating the bug.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetBugDocument(
@@ -332,12 +339,12 @@ namespace Rhino.Connectors.Azure.Extensions
             return AzureUtilities.GetJsonPatchDocument(data, operation);
         }
 
-        // *** Test Invokecument ***
+        // *** Test Document ***
         /// <summary>
         /// Gets a <see cref="JsonPatchDocument"/> for creating a TestCase <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a TestCase by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Document.</param>
         /// <param name="comment">Comment to add when creating the TestCase.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetTestDocument(this RhinoTestCase testCase, Operation operation, string comment)
@@ -353,8 +360,8 @@ namespace Rhino.Connectors.Azure.Extensions
         /// Gets a <see cref="JsonPatchDocument"/> for creating a TestCase <see cref="WorkItem"/>.
         /// </summary>
         /// <param name="testCase">RhinoTestCase to create a TestCase by.</param>
-        /// <param name="operation">The <see cref="Operation"/> to use with the Invokecument.</param>
-        /// <param name="customFields">A collection of static custom fields to apply when creating the Invokecument.</param>
+        /// <param name="operation">The <see cref="Operation"/> to use with the Invoke.</param>
+        /// <param name="customFields">A collection of static custom fields to apply when creating the Document.</param>
         /// <param name="comment">Comment to add when creating the TestCase.</param>
         /// <returns>A <see cref="JsonPatchDocument"/>.</returns>
         public static JsonPatchDocument GetTestDocument(
@@ -399,7 +406,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Rhino Test Step  ***
+        #region *** Rhino Test Step     ***
         /// <summary>
         /// Gets the step action path from RhinoTestCase context.
         /// </summary>
@@ -483,7 +490,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Work Item Object ***
+        #region *** Work Item Object    ***
         // TODO: implement
         /// <summary>
         /// Gets a RhinoPlugin from a Test Case or Shared Steps <see cref="WorkItem"/>.
@@ -544,7 +551,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static bool SetState(this WorkItem item, VssConnection connection, string state, string reason)
         {
             // setup
-            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var client = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // set
             return InvokeSetState(item, client, state, reason);
@@ -640,7 +647,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static void CreateReleation(this WorkItem item, VssConnection connection, ShallowReference target, string relation)
         {
             // setup
-            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var client = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // create
             InvokeCreateReleation(item, client, target, relation);
@@ -698,7 +705,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Test Plan Client ***
+        #region *** Test Plan Client    ***
         /// <summary>
         /// Gets all test suites associated with a <see cref="WorkItem"/>.
         /// </summary>
@@ -775,7 +782,7 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Work Item Client ***
+        #region *** Work Item Client    ***
         public static WorkItem AddComment(this WorkItemTrackingHttpClient client, WorkItem item, string comment)
         {
             // setup
@@ -1078,7 +1085,7 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 // setup
                 var dataMap = JsonDocument.Parse(json).RootElement.GetProperty("sharedParameterDataSetIds");
-                var items = JsonSerializer.Deserialize<IEnumerable<int>>(dataMap.ToString());
+                var items = System.Text.Json.JsonSerializer.Deserialize<IEnumerable<int>>(dataMap.ToString());
                 var id = items.Any() ? items.ElementAt(0) : default;
 
                 // not found
@@ -1100,13 +1107,13 @@ namespace Rhino.Connectors.Azure.Extensions
         }
 
         /// <summary>
-        /// Gets a collection of availabe states of a <see cref="WorkItem"/> by a <see cref="WorkItemStateColor.Category"/>.
+        /// Gets a collection of available states of a <see cref="WorkItem"/> by a <see cref="WorkItemStateColor.Category"/>.
         /// </summary>
         /// <param name="client">The <see cref="WorkItemTrackingHttpClient"/> to use for fetching data.</param>
         /// <param name="project">The project for which to get a list of available states.</param>
         /// <param name="itemType">The item type for which to get a list of available states.</param>
-        /// <param name="category">The categoty for which to get a list of available states.</param>
-        /// <returns>A collection of availabe states.</returns>
+        /// <param name="category">The category for which to get a list of available states.</param>
+        /// <returns>A collection of available states.</returns>
         public static IEnumerable<string> GetStatesByCategory(
             this WorkItemTrackingHttpClient client, string project, string itemType, string category)
         {
@@ -1114,7 +1121,42 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Test Run Object  ***
+        #region *** Project Client      ***
+        /// <summary>
+        /// Gets all projects.
+        /// </summary>
+        /// <param name="client">The ProjectHttpClient to use.</param>
+        /// <param name="numberOfAttempts">The number of attempts if getting project fails.</param>
+        /// <returns>A collection of TeamProjectReference.</returns>
+        public static IEnumerable<TeamProjectReference> GetProjects(this ProjectHttpClient client, int numberOfAttempts)
+        {
+            // setup
+            var attempt = 1;
+
+            // iterate
+            while (attempt < numberOfAttempts)
+            {
+                try
+                {
+                    return client.GetProjects(ProjectState.All).GetAwaiter().GetResult();
+                }
+                catch (Exception e) when (e != null)
+                {
+                    if(attempt == numberOfAttempts)
+                    {
+                        throw;
+                    }
+                    Thread.Sleep(3000);
+                    attempt++;
+                }
+            }
+
+            // default
+            return Array.Empty<TeamProjectReference>();
+        }
+        #endregion
+
+        #region *** Test Run Object     ***
         /// <summary>
         /// Gets a collection of <see cref="TestCaseResult"/>.
         /// </summary>
@@ -1124,7 +1166,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static IEnumerable<TestCaseResult> GetTestRunResults(this TestRun testRun, VssConnection connection)
         {
             // setup
-            var client = connection.GetClient<TestManagementHttpClient>();
+            var client = connection.GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // get
             return InvokeGetTestRunResults(testRun, client);
@@ -1181,7 +1223,84 @@ namespace Rhino.Connectors.Azure.Extensions
         }
         #endregion
 
-        #region *** Utilities        ***
+        #region *** VSS Connection      ***
+        /// <summary>
+        /// Retrieves an HTTP client of the specified type.
+        /// </summary>
+        /// <typeparam name="T">The type of client to retrieve.</typeparam>
+        /// <param name="connection">The connection to the parent host for this VSS connection.</param>
+        /// <param name="numberOfAttempts">The number of attempts if getting client fails.</param>
+        /// <returns>The client of the specified type.</returns>
+        public static T GetClient<T>(this VssConnection connection, int numberOfAttempts) where T : VssHttpClientBase
+        {
+            // setup
+            var attempt = 1;
+
+            // iterate
+            while (attempt < numberOfAttempts)
+            {
+                try
+                {
+                    return connection.GetClient<T>();
+                }
+                catch (Exception e) when (e != null)
+                {
+                    if (attempt == numberOfAttempts)
+                    {
+                        throw;
+                    }
+                    Thread.Sleep(3000);
+                    attempt++;
+                }
+            }
+
+            // default
+            throw new ApplicationException(
+                $"Get-Client -Type {typeof(T).FullName} = (InternalServerError|CannotGetClient)");
+        }
+        #endregion
+
+        #region *** Test Manager Client ***
+        public static TestAttachmentReference CreateAttachment(
+            this TestManagementHttpClient client, TestAttachmentCreateModel createModel, int numberOfAttempts)
+        {
+            var message = "Add-Attachment" +
+                $" -File {createModel.RequestModel.FileName}" +
+                $" -Run {createModel.TestRun}" +
+                $" -Result {createModel.TestResult}" +
+                $" -Iteration {createModel.TestIteration} = ($[message])";
+
+            // iterate
+            var attempt = 1;
+            while (attempt < numberOfAttempts)
+            {
+                try
+                {
+                    return client.CreateTestIterationResultAttachmentAsync(
+                        createModel.RequestModel,
+                        $"{createModel.Project}",
+                        createModel.TestRun,
+                        createModel.TestResult,
+                        createModel.TestIteration).GetAwaiter().GetResult();
+                }
+                catch (Exception e) when (e != null)
+                {
+                    Trace.TraceError(message.Replace("$[message]", e.Message));
+                }
+
+                Thread.Sleep(3000);
+                if (attempt++ == numberOfAttempts)
+                {
+                    break;
+                }
+            }
+
+            // default
+            return default;
+        }
+        #endregion
+
+        #region *** Utilities           ***
         // gets the test severity or default
         private static string InvokeGetSeverity(RhinoTestCase testCase) => string.IsNullOrEmpty(testCase.Severity) || testCase.Severity == "0"
             ? "3 - Medium"
@@ -1196,7 +1315,6 @@ namespace Rhino.Connectors.Azure.Extensions
                 var project = InvokeGetProjectName(testCase);
                 var closeStatus = InvokeGetStatesByCategory(client, project, "Bug", "Completed");
                 var bugs = InvokeGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
-                
 
                 // exit conditions
                 var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
@@ -1356,7 +1474,7 @@ namespace Rhino.Connectors.Azure.Extensions
             return table;
         }
 
-        // gets availabe states of a work-item by a category
+        // gets available states of a work-item by a category
         private static IEnumerable<string> InvokeGetStatesByCategory(WorkItemTrackingHttpClient client, string project, string itemType, string category) => client
             .GetWorkItemTypeStatesAsync(project, itemType)
             .GetAwaiter()

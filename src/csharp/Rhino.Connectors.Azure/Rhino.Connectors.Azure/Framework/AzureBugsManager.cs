@@ -19,6 +19,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
+using GlobalSettings = Rhino.Connectors.Azure.Extensions.GlobalSettings;
+
 namespace Rhino.Connectors.Azure.Framework
 {
     /// <summary>
@@ -77,7 +79,7 @@ namespace Rhino.Connectors.Azure.Framework
             this.logger = logger != default ? logger.CreateChildLogger(nameof(AzureBugsManager)) : logger;
 
             // clients
-            itemManagement = connection.GetClient<WorkItemTrackingHttpClient>();
+            itemManagement = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // logger
             logger?.Debug($"Create-BugManager -Connection {connection.Uri} = Created");
@@ -192,7 +194,7 @@ namespace Rhino.Connectors.Azure.Framework
             // setup
             var project = testCase.GetProjectName();
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key));
-            
+
             // duplicates
             var openBugs = testCase.GetOpenBugs(connection);
             SetDuplicates(openBugs, testRun);
@@ -220,7 +222,7 @@ namespace Rhino.Connectors.Azure.Framework
                 testCaseResult.AssociatedBugs.AddRange(openBugs.Select(i => i.GetTestReference()));
             }
             connection
-                .GetClient<TestManagementHttpClient>()
+                .GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts)
                 .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
                 .GetAwaiter()
                 .GetResult();
@@ -231,7 +233,7 @@ namespace Rhino.Connectors.Azure.Framework
             // close bugs
             return bugsClosed;
         }
-        
+
         private string GetCloseState()
         {
             // setup
@@ -248,9 +250,11 @@ namespace Rhino.Connectors.Azure.Framework
 
         private bool CloseBugs(IEnumerable<WorkItem> bugs, TestRun testRun)
         {
+            // constants
+            const string closeReason = "Fixed and verified";
+
             // setup
             var closeState = GetCloseState();
-            var closeReason = "Fixed and verified";
             var results = new List<bool>();
             var comment =
                 "Automatically closed by Rhino engine on " +
@@ -277,10 +281,11 @@ namespace Rhino.Connectors.Azure.Framework
             {
                 return;
             }
+            // constants
+            const string reason = "Duplicate";
 
             // setup
             var state = GetStatesByCategory("Resolved");
-            var reason = "Duplicate";
             var comment =
                 "Automatically marked as duplicate by Rhino engine on " +
                 $"execution <a href=\"{testRun.WebAccessUrl}\">{testRun.Id}</a>.";

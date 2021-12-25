@@ -253,11 +253,11 @@ namespace Rhino.Connectors.Azure.Extensions
             foreach (var sharedAction in sharedActions)
             {
                 // get
-                var steps = actionResults.Where(i => i.ActionPath.StartsWith(sharedAction.ActionPath.Substring(0, 8)));
+                var steps = actionResults.Where(i => i.ActionPath.StartsWith(sharedAction.ActionPath[..8]));
                 var step = steps.FirstOrDefault(i => i.SharedStepModel != null);
 
                 // build
-                step.ActionPath = step.ActionPath.Substring(0, 8);
+                step.ActionPath = step.ActionPath[..8];
                 step.StepIdentifier = step.StepIdentifier.Split(";")[0];
 
                 // get
@@ -332,29 +332,11 @@ namespace Rhino.Connectors.Azure.Extensions
         /// <returns>A collection of <see cref="AttachmentReference"/> after uploaded.</returns>
         public static IEnumerable<TestAttachmentRequestModel> GetAttachments(this RhinoTestStep testStep)
         {
-            // setup
-            var images = testStep.GetScreenshots();
-
             // build
-            var models = new List<TestAttachmentRequestModel>();
-            foreach (var attachment in images.Select(i => testStep.GetAttachment(filePath: i)))
-            {
-                byte[] bytes;
-                using (var memoryStream = new MemoryStream())
-                {
-                    attachment.UploadStream.CopyTo(memoryStream);
-                    bytes = memoryStream.ToArray();
-                }
-                string base64 = Convert.ToBase64String(bytes);
-
-                models.Add(new TestAttachmentRequestModel
-                {
-                    AttachmentType = attachment.Type,
-                    Comment = "Automatically created by Rhino Engine",
-                    FileName = attachment.Name,
-                    Stream = base64
-                });
-            }
+            var models = testStep
+                .GetScreenshots()
+                .Select(i => testStep.GetAttachment(filePath: i))
+                .Select(i => i.GetAttachmentRequestModel());
 
             // context
             testStep.Context[AzureContextEntry.StepAttachments] = models;
@@ -461,7 +443,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 comment: $"Automatically created by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.");
 
             // build
-            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var client = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
 
             // get
             var bug = client.CreateWorkItemAsync(document, project, "Bug").GetAwaiter().GetResult();
@@ -480,7 +462,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 }
 
                 connection
-                    .GetClient<TestManagementHttpClient>()
+                    .GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts)
                     .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
                     .GetAwaiter()
                     .GetResult();
@@ -512,7 +494,7 @@ namespace Rhino.Connectors.Azure.Extensions
 
             // setup
             var testCaseResults = testRun.GetTestRunResults(connection).Where(i => i.TestCase.Id.Equals(testCase.Key, Compare));
-            var client = connection.GetClient<WorkItemTrackingHttpClient>();
+            var client = connection.GetClient<WorkItemTrackingHttpClient>(GlobalSettings.ClientNumberOfAttempts);
             var comment = $"Automatically updated by Rhino engine on execution <a href=\"{testRun.WebAccessUrl}\">{testCase.TestRunKey}</a>.";
             var project = testCase.GetProjectName();
 
@@ -538,7 +520,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 testCaseResult.AssociatedBugs.Add(bug.GetTestReference());
             }
             connection
-                .GetClient<TestManagementHttpClient>()
+                .GetClient<TestManagementHttpClient>(GlobalSettings.ClientNumberOfAttempts)
                 .UpdateTestResultsAsync(testCaseResults.ToArray(), project, testRun.Id)
                 .GetAwaiter()
                 .GetResult();
