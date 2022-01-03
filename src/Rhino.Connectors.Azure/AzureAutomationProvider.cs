@@ -967,7 +967,7 @@ namespace Rhino.Connectors.Azure
         /// <summary>
         /// Adds an attachment into a single test results iteration under automation provider.
         /// </summary>
-        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update results.</param>
+        /// <param name="testCase">RhinoTestCase by which to update results.</param>
         public override void OnAddAttachement(RhinoTestCase testCase)
         {
             // exit conditions
@@ -1014,12 +1014,8 @@ namespace Rhino.Connectors.Azure
             }));
 
             // post
-            foreach (var item in createModels)
-            {
-                _testManagement.CreateAttachment(item, GlobalSettings.ClientNumberOfAttempts);
-            }
-            //Parallel.ForEach(createModels, _options, createModel
-            //    => _testManagement.CreateAttachment(createModel, GlobalSettings.ClientNumberOfAttempts));
+            Parallel.ForEach(createModels, _options, createModel
+                => _testManagement.CreateAttachment(createModel, GlobalSettings.ClientNumberOfAttempts));
         }
         #endregion
 

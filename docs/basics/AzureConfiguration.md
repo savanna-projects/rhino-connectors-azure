@@ -1,6 +1,6 @@
 [Home](../../docs/README.md 'README') 
 
-# TestRail Configuration
+# Azure Configuration
 11/01/2020 - 25 minutes to read
 
 ## In This Article
