@@ -501,7 +501,7 @@ namespace Rhino.Connectors.Azure.Extensions
         public static RhinoPlugin GetRhinoPlugin(this WorkItemTrackingHttpClient client, int id)
         {
             // setup
-            var testCase = InvokeGetRhinoTestCases(client, new[] { id }).FirstOrDefault();
+            InvokeGetRhinoTestCases(client, new[] { id });
 
             // build
             return new RhinoPlugin
