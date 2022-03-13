@@ -118,11 +118,11 @@ namespace Rhino.Connectors.Azure.Extensions
                 .Replace("$(Action)", testStep.Action);
 
             // conditional
-            html = string.IsNullOrEmpty(testStep.Expected)
+            html = !testStep.ExpectedResults.Any()
                 ? html
                     .Replace("<div style=\"padding-top:10px;\">Expected Result</div>", string.Empty)
                     .Replace("<div>$(ExpectedResult)</div>", string.Empty)
-                : html.Replace("$(ExpectedResult)", testStep.Expected);
+                : html.Replace("$(ExpectedResult)", string.Join("<BR />", testStep.ExpectedResults.Select(i => i.ExpectedResult)));
 
             // get
             return string.IsNullOrEmpty(testStep.ReasonPhrase)
@@ -381,12 +381,13 @@ namespace Rhino.Connectors.Azure.Extensions
         private static string GetActionHtml(RhinoTestStep step, int id)
         {
             // setup
-            var expectedResults = step.Expected.Replace("\r", string.Empty).Replace("\n", "&lt;BR/&gt;").Trim();
-            var type = string.IsNullOrEmpty(step.Expected) ? "ActionStep" : "ValidateStep";
-            var expectedHtml = string.IsNullOrEmpty(step.Expected)
+            var isValidateStep = step.ExpectedResults.Any();
+            var type = !isValidateStep ? "ActionStep" : "ValidateStep";
+            var expectedHtml = !isValidateStep
                 ? "&lt;DIV&gt;&lt;P&gt;&amp;nbsp;&lt;/P&gt;&lt;/DIV&gt;"
                 : "&lt;P&gt;[expected]&lt;/P&gt;";
             var action = Regex.Replace(input: step.Action, pattern: @"^\d+\.\s+", replacement: string.Empty);
+            var expectedResults = string.Join("<BR />", step.ExpectedResults.Select(i => i.ExpectedResult));
 
             return
                 $"<step id=\"{id}\" type=\"{type}\">" +
