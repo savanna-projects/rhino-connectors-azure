@@ -18,8 +18,6 @@ using Microsoft.VisualStudio.Services.WebApi;
 using Microsoft.VisualStudio.Services.WebApi.Patch;
 using Microsoft.VisualStudio.Services.WebApi.Patch.Json;
 
-using Newtonsoft.Json;
-
 using Rhino.Api.Contracts.AutomationProvider;
 using Rhino.Api.Contracts.Configuration;
 using Rhino.Api.Extensions;
@@ -32,8 +30,6 @@ using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -510,7 +506,7 @@ namespace Rhino.Connectors.Azure.Extensions
             };
         }
 
-        public static ActionAttribute GetPluginPa(this WorkItem item)
+        private static ActionAttribute GetPluginPa(this WorkItem item)
         {
             // bad request
             var itemType = $"{item.Fields["System.WorkItemType"]}";
@@ -1011,13 +1007,22 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setups
             var onStep = step.Node.SelectNodes(".//parameterizedstring");
+            var expectedResults = onStep[1]
+                .InnerText.DecodeHtml()
+                .Replace(pattern: "(?i)(verify|assert)", replacement: "\nverify")
+                .Split('\n')
+                .Where(i => !string.IsNullOrEmpty(i.Trim()))
+                .ToList();
 
             // build
             var rhinoStep = new RhinoTestStep
             {
                 Action = onStep[0].InnerText.DecodeHtml().Trim(),
-                Expected = onStep[1].InnerText.DecodeHtml().Replace(pattern: "(?i)(verify|assert)", replacement: "\nverify").Trim()
+                ExpectedResults = expectedResults?
+                    .Select(i => new RhinoExpectedResult { ExpectedResult = i })
+                    .ToArray()
             };
+            rhinoStep.ExpectedResults ??= Array.Empty<RhinoExpectedResult>();
 
             // setup
             var id = step.Node.GetAttributeValue("id", "-1");

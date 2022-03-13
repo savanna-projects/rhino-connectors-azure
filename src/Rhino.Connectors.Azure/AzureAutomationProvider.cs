@@ -220,7 +220,8 @@ namespace Rhino.Connectors.Azure
                 .Extensions
                 .CollectionExtensions
                 .DistinctBy(testCases, (i) => i.Key)
-                .Where(i => !invalidTestCases.Contains(i.Key)).ToList();
+                .Where(i => !invalidTestCases.Contains(i.Key))
+                .ToList();
             _logger?.Debug($"Get-TestCases -Distinct = {distinctTestCases.Count}");
 
             // get
@@ -601,6 +602,7 @@ namespace Rhino.Connectors.Azure
         #endregion
 
         #region *** Create: Test Run  ***
+        // TODO: add retry on connection failure
         /// <summary>
         /// Creates an automation provider test run entity. Use this method to implement the automation
         /// provider test run creation and to modify the loaded Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.
