@@ -84,7 +84,7 @@ namespace Rhino.Connectors.Azure
         /// Performed just before each test is called.
         /// </summary>
         /// <param name="testCase">The Rhino.Api.Contracts.AutomationProvider.RhinoTestCase which is being executed.</param>
-        public override RhinoTestCase OnTestSetup(RhinoTestCase testCase)
+        protected override RhinoTestCase OnTestSetup(RhinoTestCase testCase)
         {
             // setup
             testCase.Context[AzureContextEntry.Outcome] = nameof(TestOutcome.InProgress);
@@ -102,7 +102,7 @@ namespace Rhino.Connectors.Azure
         /// Performed just after each test is called.
         /// </summary>
         /// <param name="testCase">The Rhino.Api.Contracts.AutomationProvider.RhinoTestCase which was executed.</param>
-        public override RhinoTestCase OnTestTeardown(RhinoTestCase testCase)
+        protected override RhinoTestCase OnTestTeardown(RhinoTestCase testCase)
         {
             // setup
             var outcome = testCase.Actual ? nameof(TestOutcome.Passed) : nameof(TestOutcome.Failed);
