@@ -143,7 +143,7 @@ namespace Rhino.Connectors.Azure
         /// <param name="plugins">An existing collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</param>
         /// <returns>A collection of Rhino.Api.Contracts.AutomationProvider.RhinoPlugin.</returns>
         /// <remarks>You can implement this method to load plugins from A.L.M or other source.</remarks>
-        public override (IEnumerable<RhinoPlugin> Rhino, IEnumerable<PluginAttribute> Gravity) OnGetPlugins()
+        protected override (IEnumerable<RhinoPlugin> Rhino, IEnumerable<PluginAttribute> Gravity) OnGetPlugins()
         {
             //// setup
             //var wiql = new Wiql()
@@ -180,7 +180,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="ids">A list of test ids to get test cases by.</param>
         /// <returns>A collection of Rhino.Api.Contracts.AutomationProvider.RhinoTestCase</returns>
-        public override IEnumerable<RhinoTestCase> OnGetTestCases(params string[] ids)
+        protected override IEnumerable<RhinoTestCase> OnGetTestCases(params string[] ids)
         {
             // constants
             const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -418,7 +418,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to create automation provider test case.</param>
         /// <returns>The ID of the newly created entity.</returns>
-        public override string OnCreateTestCase(RhinoTestCase testCase)
+        protected override string OnCreateTestCase(RhinoTestCase testCase)
         {
             // setup
             var document = testCase.GetTestDocument(Operation.Add, "Automatically created by Rhino engine.");
@@ -485,7 +485,7 @@ namespace Rhino.Connectors.Azure
         /// Implements a mechanism of setting a testing configuration for an automation provider.
         /// </summary>
         /// <remarks>Use this method for <see cref="SetConfiguration"/> customization.</remarks>
-        public override void OnSetConfiguration(RhinoConfiguration configuration)
+        protected override void OnSetConfiguration(RhinoConfiguration configuration)
         {
             // setup
             const string ConfigurationName = "Rhino - Automation Configuration";
@@ -609,7 +609,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun object to modify before creating.</param>
         /// <returns>Rhino.Api.Contracts.AutomationProvider.RhinoTestRun based on provided test cases.</returns>
-        public override RhinoTestRun OnCreateTestRun(RhinoTestRun testRun)
+        protected override RhinoTestRun OnCreateTestRun(RhinoTestRun testRun)
         {
             // create
             try
@@ -774,7 +774,7 @@ namespace Rhino.Connectors.Azure
         /// Completes automation provider test run results, if any were missed or bypassed.
         /// </summary>
         /// <param name="testRun">Rhino.Api.Contracts.AutomationProvider.RhinoTestRun results object to complete by.</param>
-        public override void OnRunTeardown(RhinoTestRun testRun)
+        protected override void OnRunTeardown(RhinoTestRun testRun)
         {
             // setup
             _ = int.TryParse(testRun.Key, out int runIdOut);
@@ -865,7 +865,7 @@ namespace Rhino.Connectors.Azure
         /// Updates a single test results iteration under automation provider.
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update results.</param>
-        public override void OnUpdateTestResult(RhinoTestCase testCase)
+        protected override void OnUpdateTestResult(RhinoTestCase testCase)
         {
             // setup
             var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
@@ -970,7 +970,7 @@ namespace Rhino.Connectors.Azure
         /// Adds an attachment into a single test results iteration under automation provider.
         /// </summary>
         /// <param name="testCase">RhinoTestCase by which to update results.</param>
-        public override void OnAddAttachement(RhinoTestCase testCase)
+        protected override void OnAddAttachement(RhinoTestCase testCase)
         {
             // exit conditions
             var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
@@ -1026,7 +1026,7 @@ namespace Rhino.Connectors.Azure
         /// Deletes one of more an automation provider test run entity.
         /// </summary>
         /// <param name="testRuns">A collection of Rhino.Api.Contracts.AutomationProvider.RhinoTestRun.Key to delete by.</param>
-        public override void OnDeleteTestRun(params string[] testRuns)
+        protected override void OnDeleteTestRun(params string[] testRuns)
         {
             // setup
             var ids = testRuns.Any(i => Regex.IsMatch(i, "(?i)all"))
@@ -1054,7 +1054,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">RhinoTestCase by which to find bugs.</param>
         /// <returns>A list of bugs (can be JSON or ID for instance).</returns>
-        public override IEnumerable<string> OnGetBugs(RhinoTestCase testCase)
+        protected override IEnumerable<string> OnGetBugs(RhinoTestCase testCase)
         {
             return _bugsManager.GetBugs(testCase);
         }
@@ -1064,7 +1064,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">RhinoTestCase by which to assert against match bugs.</param>
         /// <returns>An open bug.</returns>
-        public override string OnGetOpenBug(RhinoTestCase testCase)
+        protected override string OnGetOpenBug(RhinoTestCase testCase)
         {
             return _bugsManager.GetOpenBug(testCase);
         }
@@ -1074,7 +1074,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to create automation provider bug.</param>
         /// <returns>The ID of the newly created entity.</returns>
-        public override string OnCreateBug(RhinoTestCase testCase)
+        protected override string OnCreateBug(RhinoTestCase testCase)
         {
             return _bugsManager.OnCreateBug(testCase);
         }
@@ -1084,7 +1084,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update automation provider bug.</param>
         /// <returns>The updated bug.</returns>
-        public override string OnUpdateBug(RhinoTestCase testCase)
+        protected override string OnUpdateBug(RhinoTestCase testCase)
         {
             return _bugsManager.OnUpdateBug(testCase);
         }
@@ -1094,7 +1094,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
         /// <returns>A collection of updated bugs.</returns>
-        public override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
+        protected override IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
             return _bugsManager.OnCloseBugs(testCase);
         }
@@ -1104,7 +1104,7 @@ namespace Rhino.Connectors.Azure
         /// </summary>
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
         /// <returns>The closed bug.</returns>
-        public override string OnCloseBug(RhinoTestCase testCase)
+        protected override string OnCloseBug(RhinoTestCase testCase)
         {
             // setup
             var closedBugs = _bugsManager.OnCloseBugs(testCase);
