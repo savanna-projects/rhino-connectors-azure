@@ -13,7 +13,7 @@ namespace Rhino.Connectors.Azure.UnitTests
         [TestMethod]
         public void Test()
         {
-            Assert.IsTrue(true);
+
         }
     }
 }

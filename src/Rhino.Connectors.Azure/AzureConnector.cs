@@ -115,6 +115,7 @@ namespace Rhino.Connectors.Azure
 
             // put
             testCase.Context[AzureContextEntry.Outcome] = outcome;
+            testCase.Context["Phase"] = "Teardown";
 
             // update
             ProviderManager.UpdateTestResult(testCase);

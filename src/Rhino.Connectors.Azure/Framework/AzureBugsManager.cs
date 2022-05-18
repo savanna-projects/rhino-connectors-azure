@@ -149,7 +149,10 @@ namespace Rhino.Connectors.Azure.Framework
         {
             // setup
             var testRun = testCase.GetTestRun(connection);
-            var openBugs = testCase.GetOpenBugs(connection).ToArray();
+            var openBugs = testCase
+                .GetOpenBugs(connection)
+                .Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false))
+                .ToArray();
 
             // exit conditions
             if (openBugs.Length == 0)
@@ -181,6 +184,9 @@ namespace Rhino.Connectors.Azure.Framework
         /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to close automation provider bugs.</param>
         public IEnumerable<string> OnCloseBugs(RhinoTestCase testCase)
         {
+            // force teardown
+            testCase.Context["Phase"] = "Teardown";
+
             // setup
             var testRun = testCase.GetTestRun(connection);
 

@@ -67,12 +67,10 @@ namespace Rhino.Connectors.Azure.Extensions
             {
                 Id = testCase.Iteration + 1,
                 StartedDate = DateTime.Now.ToAzureDate(addMilliseconds: true),
-                Comment = "Automatically Created by Rhino Engine."
+                Comment = "Automatically Created by Rhino Engine.",
+                ActionResults = GetActionResults(testCase, setOutcome).ToList(),
+                Parameters = GetParametersResults(testCase).ToList()
             };
-
-            // build
-            iteration.ActionResults = GetActionResults(testCase, setOutcome).ToList();
-            iteration.Parameters = GetParametersResults(testCase).ToList();
 
             // outcome
             if (setOutcome)
@@ -378,7 +376,10 @@ namespace Rhino.Connectors.Azure.Extensions
         public static bool IsBugMatch(this RhinoTestCase testCase, WorkItem bug, bool assertDataSource)
         {
             // setup
-            var bugHtml = $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}".DecodeHtml();
+            var bugHtml = bug.Fields.ContainsKey("Microsoft.VSTS.TCM.ReproSteps")
+                ? $"{bug.Fields["Microsoft.VSTS.TCM.ReproSteps"]}".DecodeHtml()
+                : "<div>This bug have no steps to reproduce.</div>";
+            
             var testHtml = testCase.GetBugHtml().DecodeHtml();
 
             // build: bug (target)
