@@ -1322,7 +1322,10 @@ namespace Rhino.Connectors.Azure.Extensions
                 var bugs = InvokeGetBugs(client, testCase).Where(i => !closeStatus.Contains($"{i.Fields["System.State"]}"));
 
                 // exit conditions
-                var openBugs = bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false));
+                //var openBugs = !isClose
+                //    ? bugs.Where(i => testCase.IsBugMatch(bug: i, assertDataSource: false))
+                //    : bugs;
+                var openBugs = bugs;
                 if (!openBugs.Any())
                 {
                     return Array.Empty<WorkItem>();
