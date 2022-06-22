@@ -35,6 +35,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Git", "Git", "{F7B3F59F-7EB
 		..\LICENSE = ..\LICENSE
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rhino.Connectors.Azure.Text", "Rhino.Connectors.Azure.Text\Rhino.Connectors.Azure.Text.csproj", "{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -49,6 +51,10 @@ Global
 		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9E89E591-D857-4F4C-AC52-48F2BE820201}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
