@@ -200,7 +200,7 @@ namespace Rhino.Connectors.Azure
             // fetch
             foreach (var method in methods)
             {
-                var range = OnGetTestCases(method, ids);
+                var range = GetTestCases(method, ids);
                 testCases.AddRange(range);
             }
 
@@ -226,26 +226,6 @@ namespace Rhino.Connectors.Azure
 
             // get
             return distinctTestCases.Select(i => i.AddToContext(CapabilitesKey, Configuration.Capabilities));
-        }
-
-        private IEnumerable<RhinoTestCase> OnGetTestCases(MethodInfo method, IEnumerable<string> ids)
-        {
-            var testCases = new ConcurrentBag<RhinoTestCase>();
-            try
-            {
-                var range = method.Invoke(this, new object[] { ids }) as IEnumerable<RhinoTestCase>;
-                range ??= Array.Empty<RhinoTestCase>();
-                testCases.AddRange(range);
-            }
-            catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
-            {
-                _logger?.Warn("Get-TestCases = NotSupported");
-            }
-            catch (Exception e) when (e != null)
-            {
-                _logger?.Error($"Get-TestCases = {e.GetBaseException().Message}");
-            }
-            return testCases;
         }
 
         // FACTORY
@@ -391,6 +371,26 @@ namespace Rhino.Connectors.Azure
         }
 
         // get test cases by id
+        private IEnumerable<RhinoTestCase> GetTestCases(MethodInfo method, IEnumerable<string> ids)
+        {
+            var testCases = new ConcurrentBag<RhinoTestCase>();
+            try
+            {
+                var range = method.Invoke(this, new object[] { ids }) as IEnumerable<RhinoTestCase>;
+                range ??= Array.Empty<RhinoTestCase>();
+                testCases.AddRange(range);
+            }
+            catch (Exception e) when (e.GetBaseException() is VssResourceNotFoundException)
+            {
+                _logger?.Warn("Get-TestCases = NotSupported");
+            }
+            catch (Exception e) when (e != null)
+            {
+                _logger?.Error($"Get-TestCases = {e.GetBaseException().Message}");
+            }
+            return testCases;
+        }
+
         private IEnumerable<WorkItem> GetTestCases(IEnumerable<int> ids)
         {
             try
@@ -681,10 +681,11 @@ namespace Rhino.Connectors.Azure
             return testRun;
         }
 
+        // TODO: investigate when TestRun property is not updated here
         private TestRun InvokeCreateTestRun(RhinoTestRun testRun)
         {
             // setup
-            var runCreateModel = GetCreateModel();
+            var runCreateModel = GetCreateModel(testRun);
 
             // create
             var onTestRun = _testManagement
@@ -700,11 +701,11 @@ namespace Rhino.Connectors.Azure
             return onTestRun;
         }
 
-        private RunCreateModel GetCreateModel()
+        private RunCreateModel GetCreateModel(RhinoTestRun testRun)
         {
             // setup
             var plan = GetFromOptions(AzureCapability.TestPlan);
-            _ = int.TryParse(TestRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
+            _ = int.TryParse(testRun.TestCases.FirstOrDefault()?.Key, out int testCaseId);
 
             try
             {
@@ -714,10 +715,10 @@ namespace Rhino.Connectors.Azure
                 _logger?.Debug($"Get-PlanForTest -Project {_project} -TestCase {testCaseId} = {plan}");
 
                 //  test points
-                var points = GetAllTestPoints().Select(i => i.Id).ToArray();
+                var points = GetAllTestPoints(testRun).Select(i => i.Id).ToArray();
 
                 // get
-                return new RunCreateModel(name: TestRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
+                return new RunCreateModel(name: testRun.Title, pointIds: points, plan: new ShallowReference(id: $"{plan}"));
             }
             catch (Exception e) when (e != null)
             {
@@ -727,10 +728,10 @@ namespace Rhino.Connectors.Azure
             }
         }
 
-        private IEnumerable<TestPoint> GetAllTestPoints()
+        private IEnumerable<TestPoint> GetAllTestPoints(RhinoTestRun testRun)
         {
             // setup
-            var testCasesGroups = TestRun.TestCases.Split(100);
+            var testCasesGroups = testRun.TestCases.Split(100);
             var testPoints = new ConcurrentBag<TestPoint>();
 
             // build

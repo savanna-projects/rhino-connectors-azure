@@ -5,7 +5,7 @@
  */
 namespace Rhino.Connectors.Azure.Contracts
 {
-    internal static class AzureContextEntry
+    public static class AzureContextEntry
     {
         /// <summary>
         /// Context entry to hold Azure Test Action Path. This is the path given to the action by TCM.

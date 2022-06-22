@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net6.0</TargetFrameworks>
+		<PackageId>Rhino.Connectors.Azure.Text</PackageId>
+		<LangVersion>latest</LangVersion>
+		<Title>Rhino Azure Connector - Connector for Azure DevOps and Team Foundation Server (TFS).</Title>
+		<Authors>Rhino-API Community</Authors>
+		<Description>Connector for Azure DevOps and Team Foundation Server (TFS).</Description>
+		<PackageTags>automation,crawling,crawl,selenium,appium,automation testing,automation test,qa,gravity,gravity api,scrapping,scrap</PackageTags>
+		<PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+		<PackageProjectUrl>https://github.com/savanna-projects/rhino-connectors-gurock</PackageProjectUrl>
+		<NeutralLanguage>en-US</NeutralLanguage>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <PackageReference Include="Rhino.Connectors.Text" Version="2022.3.27.1" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Rhino.Connectors.Azure\Rhino.Connectors.Azure.csproj" />
+	</ItemGroup>
+
+</Project>
