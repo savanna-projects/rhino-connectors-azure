@@ -428,6 +428,7 @@ namespace Rhino.Connectors.Azure
                 .CreateWorkItemAsync(document, Configuration.ConnectorConfiguration.Project, TestCase)
                 .GetAwaiter()
                 .GetResult();
+
             var itemResult = JsonConvert.SerializeObject(item);
             var id = $"{item.Id.ToInt()}";
 
@@ -476,6 +477,40 @@ namespace Rhino.Connectors.Azure
                     $"-TestPlan {testPlan} " +
                     $"-TestSuite {testSuite} " +
                     $"-TestCase {testCase} = {e.GetBaseException().Message}");
+            }
+        }
+        #endregion
+
+        #region *** Update: Test Case ***
+        /// <summary>
+        /// Updates an existing test case (partial updates are supported, i.e. you can submit and update specific fields only).
+        /// </summary>
+        /// <param name="testCase">RhinoTestCase by which to update automation provider test case.</param>
+        protected override void OnUpdateTestCase(RhinoTestCase testCase)
+        {
+            // setup
+            var document = testCase.GetTestDocument(Operation.Add, "Automatically synced by Rhino engine.");
+            _ = int.TryParse(testCase.Key, out int idOut);
+
+            // post
+            _itemManagement
+                .UpdateWorkItemAsync(document, idOut, bypassRules: true, suppressNotifications: true, expand: WorkItemExpand.All)
+                .GetAwaiter()
+                .GetResult();
+
+            // exit conditions
+            if (!testCase.TestSuites.Any())
+            {
+                return;
+            }
+
+            // setup: add to suites
+            var testPlan = Configuration.GetAzureCapability(AzureCapability.TestPlan, 0);
+
+            // add
+            foreach (var testSuite in testCase.TestSuites.AsNumbers())
+            {
+                AddTestToSuite(testPlan, testSuite, testCase: testCase.Key);
             }
         }
         #endregion
