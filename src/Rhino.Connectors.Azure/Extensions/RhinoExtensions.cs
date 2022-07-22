@@ -592,7 +592,7 @@ namespace Rhino.Connectors.Azure.Extensions
         {
             // setup
             var isOs = configuration.ConnectorConfiguration.AsOsUser;
-            var userName = configuration.ConnectorConfiguration.UserName;
+            var userName = configuration.ConnectorConfiguration.Username;
             var password = configuration.ConnectorConfiguration.Password;
 
             // by token
