@@ -1250,6 +1250,7 @@ namespace Rhino.Connectors.Azure.Extensions
                 }
                 catch (Exception e) when (e != null)
                 {
+                    Trace.TraceError($"Get-Client -Attempt {attempt} = ({e.Message})");
                     if (attempt == numberOfAttempts)
                     {
                         throw;
