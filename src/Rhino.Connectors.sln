@@ -5,37 +5,37 @@ VisualStudioVersion = 17.0.32014.148
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rhino.Connectors.Azure", "Rhino.Connectors.Azure\Rhino.Connectors.Azure.csproj", "{9C175E60-2780-4E50-A01B-456B143A84EE}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{2DA549C5-ACC6-4FA0-8CCD-F234CB3728B7}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".build", ".build", "{2DA549C5-ACC6-4FA0-8CCD-F234CB3728B7}"
 	ProjectSection(SolutionItems) = preProject
 		..\..\..\build\AzurePipeline.yaml = ..\..\..\build\AzurePipeline.yaml
 		..\..\..\build\AzurePipelineProduction.yaml = ..\..\..\build\AzurePipelineProduction.yaml
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documents", "Documents", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".documents", ".documents", "{E7CAEDD6-7AEC-4AD8-9085-9C453F1BDBC4}"
 	ProjectSection(SolutionItems) = preProject
 		..\docs\basics\ConnectorCapabilities.md = ..\docs\basics\ConnectorCapabilities.md
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{6807803A-0674-4358-A836-D2E414A0B55E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".test", ".test", "{6807803A-0674-4358-A836-D2E414A0B55E}"
 	ProjectSection(SolutionItems) = preProject
 		..\test\SettingsMsTest.runsettings = ..\test\SettingsMsTest.runsettings
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rhino.Connectors.Azure.UnitTests", "Rhino.Connectors.Azure.UnitTests\Rhino.Connectors.Azure.UnitTests.csproj", "{9E89E591-D857-4F4C-AC52-48F2BE820201}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lib", "Lib", "{A1163991-A2BF-4A59-BCE1-44F4192915D5}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".lib", ".lib", "{A1163991-A2BF-4A59-BCE1-44F4192915D5}"
 	ProjectSection(SolutionItems) = preProject
 		..\lib\Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.dll = ..\lib\Microsoft.VisualStudio.Services.TestManagement.TestPlanning.WebApi.dll
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Git", "Git", "{F7B3F59F-7EBD-4CB4-9D74-2996EFF5B18C}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".git", ".git", "{F7B3F59F-7EBD-4CB4-9D74-2996EFF5B18C}"
 	ProjectSection(SolutionItems) = preProject
 		..\.gitignore = ..\.gitignore
 		..\LICENSE = ..\LICENSE
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Rhino.Connectors.Azure.Text", "Rhino.Connectors.Azure.Text\Rhino.Connectors.Azure.Text.csproj", "{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Rhino.Connectors.Azure.Text", "Rhino.Connectors.Azure.Text\Rhino.Connectors.Azure.Text.csproj", "{2984FAF1-9345-4FE1-91E8-67F7E0BFA478}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
