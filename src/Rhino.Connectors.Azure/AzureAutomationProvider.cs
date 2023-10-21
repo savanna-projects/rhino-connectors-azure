@@ -1006,24 +1006,31 @@ namespace Rhino.Connectors.Azure
         /// Adds an attachment into a single test results iteration under automation provider.
         /// </summary>
         /// <param name="testCase">RhinoTestCase by which to update results.</param>
-        protected override void OnAddAttachement(RhinoTestCase testCase)
+        protected override void OnAddAttachment(RhinoTestCase testCase)
         {
             // exit conditions
             var outcome = CSharpExtensions.Get(testCase.Context, AzureContextEntry.Outcome, nameof(TestOutcome.Unspecified));
-            var incluededOutcomes = new[]
+            var includedOutcomes = new[]
             {
                 nameof(TestOutcome.Passed),
                 nameof(TestOutcome.Failed),
                 nameof(TestOutcome.Inconclusive),
                 nameof(TestOutcome.Warning)
             };
-            if (!incluededOutcomes.Contains(outcome))
+            if (!includedOutcomes.Contains(outcome))
             {
                 return;
             }
 
             // setup
-            _ = int.TryParse(TestRun.Key, out int runId);
+            var runId = -1;
+            var isTestRun = int.TryParse(TestRun.Key, out runId);
+            var isTestCase = int.TryParse(testCase.TestRunKey, out runId);
+            if (!isTestCase && !isTestRun)
+            {
+                return;
+            }
+
             var partialResults = _testManagement
                 .GetTestResultsAsync(_project, runId)
                 .GetAwaiter()

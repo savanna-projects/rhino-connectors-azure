@@ -122,14 +122,19 @@ namespace Rhino.Connectors.Azure.Text
         #endregion
 
         #region *** Put: Test Results ***
-        /// <summary>
-        /// Updates a single test results iteration under automation provider.
-        /// </summary>
-        /// <param name="testCase">Rhino.Api.Contracts.AutomationProvider.RhinoTestCase by which to update results.</param>
+        /// <inheritdoc />>
         protected override void OnUpdateTestResult(RhinoTestCase testCase)
         {
             _azureProvider.InvokeMethod(
                 method: "OnUpdateTestResult",
+                parameters: new object[] { testCase });
+        }
+
+        /// <inheritdoc />
+        protected override void OnAddAttachment(RhinoTestCase testCase)
+        {
+            _azureProvider.InvokeMethod(
+                method: "OnAddAttachment",
                 parameters: new object[] { testCase });
         }
         #endregion
