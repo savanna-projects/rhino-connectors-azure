@@ -19,7 +19,7 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.TeamFoundationServer.Client" Version="16.205.1" />
 		<PackageReference Include="Microsoft.VisualStudio.Services.Client" Version="16.205.1" />
-		<PackageReference Include="Rhino.Api" Version="2023.8.16.1" />
+		<PackageReference Include="Rhino.Api" Version="2023.10.21.2" />
 		<PackageReference Include="Rhino.Connectors.Azure.WebApi" Version="16.162.29627.1" />
 	</ItemGroup>
 
